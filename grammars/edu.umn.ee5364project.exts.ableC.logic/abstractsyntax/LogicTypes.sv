@@ -28,7 +28,7 @@ top::LogicTypeExpr ::= width::Integer
     else if width <= 64
     then typedefTypeExpr(nilQualifier(), name("int64_t", location=builtin))
     else errorTypeExpr([err(top.location, s"Integer width not yet implemented: ${toString(width)}")]);
-  top.logicType = integerLogicType(true, width);
+  top.logicType = intLogicType(true, width);
   top.errors := if width < 1 then [err(top.location, "Width must be >= 1")] else [];
 }
 
@@ -46,7 +46,7 @@ top::LogicTypeExpr ::= width::Integer
     else if width <= 64
     then typedefTypeExpr(nilQualifier(), name("uint64_t", location=builtin))
     else errorTypeExpr([err(top.location, s"Integer width not yet implemented: ${toString(width)}")]);
-  top.logicType = integerLogicType(false, width);
+  top.logicType = intLogicType(false, width);
   top.errors := if width < 1 then [err(top.location, "Width must be >= 1")] else [];
 }
 
@@ -72,7 +72,7 @@ top::LogicType ::=
   top.width = 1;
 }
 
-abstract production integerLogicType
+abstract production intLogicType
 top::LogicType ::= signed::Boolean width::Integer
 {
   top.pp = pp"${text(if signed then "signed" else "unsigned")}:${text(toString(width))}";

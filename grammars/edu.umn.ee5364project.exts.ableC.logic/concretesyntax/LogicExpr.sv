@@ -1,11 +1,14 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:concretesyntax;
 
 terminal BitAppendOp_t ',' association=right, precedence=0, lexer classes {Csymbol};
+terminal MaxPrecLBracket_t '[' precedence=100, lexer classes {Csymbol}; -- Needed to avoid shift/reduce conflict
 
 terminal LogicIdentifier_t /[A-Za-z_\$][A-Za-z_0-9\$]*/;
 
 terminal True_t  'true'  dominates {LogicIdentifier_t};
 terminal False_t 'false' dominates {LogicIdentifier_t};
+
+terminal Range_t '..';
 
 nonterminal LogicExpr_c with ast<LogicExpr>, location;
 
@@ -31,6 +34,11 @@ concrete productions top::LogicExpr_c
 
 | e1::LogicExpr_c BitAppendOp_t e2::LogicExpr_c
   { top.ast = bitAppendExpr(e1.ast, e2.ast, location=top.location); }
+  
+| e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t ']'
+  { top.ast = bitSelectExpr(e.ast, toInt(i.lexeme), location=top.location); }
+| e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t '..' j::DecConstant_t ']'
+  { top.ast = bitSelectRangeExpr(e.ast, toInt(i.lexeme), toInt(j.lexeme), location=top.location); }
 
 | '(' e::LogicExpr_c ')'
   { top.ast = e.ast; }

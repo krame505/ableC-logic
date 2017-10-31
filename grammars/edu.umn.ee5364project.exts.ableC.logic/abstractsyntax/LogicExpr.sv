@@ -30,7 +30,7 @@ top::LogicExpr ::= signed::Boolean bits::Bits
         noIntSuffix(), -- TODO: Does this need a suffix?
         location=builtin),
       location=top.location);
-  top.logicType = integerLogicType(signed, length(bits));
+  top.logicType = intLogicType(signed, length(bits));
   top.errors := [];
 }
 
@@ -70,6 +70,38 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
         e2.host,
         location=builtin),
       location=top.location);
-  top.logicType = integerLogicType(false, e1.logicType.width + e2.logicType.width);
+  top.logicType = intLogicType(false, e1.logicType.width + e2.logicType.width);
   top.errors := e1.errors ++ e2.errors;
+}
+
+abstract production bitSelectExpr
+top::LogicExpr ::= e::LogicExpr i::Integer
+{
+  top.pp = pp"${e.pp}[${text(toString(i))})}]";
+  top.host =
+    explicitCastExpr(
+      typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
+      andBitExpr(
+        mkIntConst(1, builtin),
+        rshExpr(e.host, mkIntConst(e.logicType.width - (i + 1), builtin), location=builtin),
+        location=builtin),
+      location=builtin);
+  top.logicType = boolLogicType();
+  top.errors := e.errors;
+}
+
+abstract production bitSelectRangeExpr
+top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
+{
+  top.pp = pp"${e.pp}[${text(toString(i))}..${text(toString(j))}]";
+  top.host =
+    explicitCastExpr(
+      typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
+      andBitExpr(
+        mkIntConst(bitsToInt(false, repeat(true, j - i + 1)), builtin),
+        rshExpr(e.host, mkIntConst(e.logicType.width - (j + 1), builtin), location=builtin),
+        location=builtin),
+      location=builtin);
+  top.logicType = intLogicType(false, j - i + 1);
+  top.errors := e.errors;
 }
