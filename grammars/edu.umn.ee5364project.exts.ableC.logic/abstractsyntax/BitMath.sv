@@ -3,12 +3,24 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 type Bits = [Boolean];
 
 function intToBits
-Bits ::= value::Integer
+Bits ::= signed::Boolean value::Integer
 {
-  local help::(Bits ::= Integer) =
-    \ i::Integer -> (i % 2 != 0) :: if i <= 1 then [] else help(i / 2);
+  local help::(Bits ::= Integer Bits) =
+    \ i::Integer bs::Bits -> if i == 0 then bs else help(i / 2, (i % 2 != 0) :: bs);
   
-  return if value < 0 then twosComplementBits(help(-value)) else help(value);
+  local posRes::Bits = help(value, []);
+  local negRes::Bits = help(-value, []);
+  
+  return
+    if signed
+    then if value < 0
+      then if head(negRes)
+        then twosComplementBits(false :: negRes)
+        else twosComplementBits(negRes)
+      else if head(posRes)
+        then false :: posRes
+        else posRes
+    else posRes;
 }
 
 -- TODO: This has issues with Integer overflow, since we don't have a better internal representation

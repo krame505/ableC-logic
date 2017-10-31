@@ -1,0 +1,17 @@
+
+#include <stdint.h>
+
+#ifndef _LOGIC_XH
+#define _LOGIC_XH
+
+// Check that bool, true and false aren't defined as macros
+#if defined(bool) || defined(true) || defined(false)
+#error "stdbool.h is incompatible with the boolean logic extension, and should not be included"
+#endif
+
+// Provide our own definitions for boolean constructs to be used at the program level
+typedef _Bool bool;
+const bool true = 1;
+const bool false = 0;
+
+#endif

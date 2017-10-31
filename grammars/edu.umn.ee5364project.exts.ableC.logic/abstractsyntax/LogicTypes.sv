@@ -62,11 +62,12 @@ top::LogicTypeExpr ::= msg::[Message]
 synthesized attribute logicTypeExpr::LogicTypeExpr;
 synthesized attribute width::Integer;
 
-nonterminal LogicType with logicTypeExpr, width;
+nonterminal LogicType with pp, logicTypeExpr, width;
 
 abstract production boolLogicType
 top::LogicType ::= 
 {
+  top.pp = pp"bool";
   top.logicTypeExpr = boolLogicTypeExpr(location=builtin);
   top.width = 1;
 }
@@ -74,6 +75,7 @@ top::LogicType ::=
 abstract production integerLogicType
 top::LogicType ::= signed::Boolean width::Integer
 {
+  top.pp = pp"${text(if signed then "signed" else "unsigned")}:${text(toString(width))}";
   top.logicTypeExpr =
     if signed
     then signedLogicTypeExpr(width, location=builtin)
@@ -84,6 +86,7 @@ top::LogicType ::= signed::Boolean width::Integer
 abstract production errorLogicType
 top::LogicType ::= 
 {
+  top.pp = pp"/*err*/";
   top.logicTypeExpr = errorLogicTypeExpr([], location=builtin); 
   top.width = 1;
 }

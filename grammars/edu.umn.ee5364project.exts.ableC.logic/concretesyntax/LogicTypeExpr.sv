@@ -1,6 +1,6 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:concretesyntax;
 
-terminal Bool_t 'bool' lexer classes {Ckeyword};
+terminal Bool_t 'bool';
 
 nonterminal LogicTypeExpr_c with ast<LogicTypeExpr>, location;
 

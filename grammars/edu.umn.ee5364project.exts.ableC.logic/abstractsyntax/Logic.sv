@@ -15,20 +15,22 @@ top::Decl ::= f::LogicFunctionDecl
   f.logicFunctionEnv = top.env.logicFunctions;
   
   local hostTrans::Decl = functionDeclaration(f.host);
+  local hostErrorTrans::Decl =
+    defsDecl([valueDef("_logic_function_" ++ f.name, errorValueItem())]);
   
   local localErrors::[Message] = f.errors;
   local fwrd::Decl = hostTrans;
+  local errorFwrd::Decl = hostErrorTrans;
   
   forwards to
     decls(
       foldDecl([
-        -- TODO: Default function decl for host trans if there is an error...
-        if !null(localErrors) then warnDecl(localErrors) else fwrd,
+        if !null(localErrors) then decls(foldDecl([warnDecl(localErrors), errorFwrd])) else fwrd,
         defsDecl(
           valueDef(f.name, logicFunctionValueItem(top.env, f)) ::
           map(
             \ item::Pair<String LogicFunctionItem> -> logicFunctionDef(item.fst, item.snd),
-            f.logicFunctionDefs))])); -- TODO ValueItem def
+            f.logicFunctionDefs))]));
 }
 
 abstract production logicFunctionDirectCallExpr
@@ -43,7 +45,7 @@ top::Expr ::= id::Name args::Exprs
   args.callExpr = top;
   args.callVariadic = false;
   
-  local hostTrans::Expr = directCallExpr(getFunctionHostName(id), args, location=top.location);
+  local hostTrans::Expr = directCallExpr(getLogicFunctionHostName(id), args, location=top.location);
   
   local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
   local fwrd::Expr = hostTrans;
@@ -68,7 +70,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       [], nilSpecialSpecifier(),
       ret.host,
       functionTypeExprWithArgs(baseTypeExpr(), params.host, false, nilQualifier()),
-      getFunctionHostName(id),
+      getLogicFunctionHostName(id),
       nilAttribute(), nilDecl(),
       body.host);
   top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
@@ -82,6 +84,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
   params.logicValueEnv = emptyScope();
   body.logicValueEnv = addScope(params.logicValueDefs, params.logicValueEnv);
   body.logicFunctionEnv = openScope(top.logicFunctionEnv); -- In case we ever add nested logic functions I guess?
+  body.givenReturnLogicType = ret.logicType;
   
   top.errors <- id.logicFunctionRedeclarationCheck;
 }
@@ -124,7 +127,7 @@ top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
   top.errors <- id.logicValueRedeclarationCheck;
 }
 
-function getFunctionHostName
+function getLogicFunctionHostName
 Name ::= id::Name
 {
   return name("_logic_function_" ++ id.name, location=id.location);
