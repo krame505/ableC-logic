@@ -16,12 +16,20 @@ logic signed:17 foo(unsigned:7 a, bool b) {
   return 3u, c, t, f, t, f;
 }
 
+logic bool bar() {
+  return false;
+}
+
 logic unsigned:16 lsh(unsigned:16 x) {
   return x[1..15], false;
 }
 
-logic unsigned:8 bitNot(unsigned:8 x) {
+logic unsigned:8 bitNot8(unsigned:8 x) {
   return !x[0], !x[1], !x[2], !x[3], !x[4], !x[5], !x[6], !x[7];
+}
+
+logic unsigned:16 bitNot16(unsigned:16 x) {
+  return bitNot8(x[0..7]), bitNot8(x[8..15]);
 }
 
 /*
@@ -39,8 +47,8 @@ int main (int argc, char **argv) {
     printf("0x%x\n", x);
   }
 
-  printf("0x%x\n", bitNot(0x55));
-  printf("0x%x\n", bitNot(bitNot(0x55)));
+  printf("0x%x\n", bitNot16(0x5555));
+  printf("0x%x\n", bitNot16(bitNot16(0x5555)));
   
   return 0; 
 }

@@ -53,6 +53,22 @@ top::LogicExpr ::= id::Name
   top.errors <- id.logicValueLookupCheck;
 }
 
+abstract production callLogicExpr
+top::LogicExpr ::= f::Name a::LogicExprs
+{
+  top.pp = parens( ppConcat([ f.pp, parens( ppImplode( cat( comma(), space() ), a.pps ))]) );
+  top.host = directCallExpr(getLogicFunctionHostName(f), a.host, location=top.location);
+  top.logicType = f.logicFunctionItem.returnLogicType;
+  top.errors := a.errors;
+  
+  top.errors <- f.logicFunctionLookupCheck;
+  top.errors <- if null(f.logicFunctionLookupCheck) then a.argumentErrors else [];
+  
+  a.argumentPosition = 1;
+  a.expectedLogicTypes = f.logicFunctionItem.parameterLogicTypes;
+  a.callLocation = top.location;
+}
+
 -- Custom bit manipulation constructs
 abstract production bitAppendLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
@@ -132,4 +148,45 @@ top::LogicExpr ::= e::LogicExpr
   top.host = notExpr(e.host, location=top.location);
   top.logicType = boolLogicType();
   top.errors := e.errors;
+}
+
+inherited attribute expectedLogicTypes::[LogicType];
+autocopy attribute callLocation::Location;
+
+nonterminal LogicExprs with logicValueEnv, logicFunctionEnv, argumentPosition, expectedLogicTypes, callLocation, pps, host<Exprs>, count, logicTypes, errors, argumentErrors;
+
+abstract production consLogicExpr
+top::LogicExprs ::= h::LogicExpr t::LogicExprs
+{
+  top.pps = h.pp :: t.pps;
+  top.host = consExpr(h.host, t.host); -- TODO: Cast h.host to h.logicType.host
+  top.count = 1 + t.count;
+  top.logicTypes = h.logicType :: t.logicTypes;
+  top.errors := h.errors ++ t.errors;
+  top.argumentErrors =
+    case top.expectedLogicTypes of
+      lt :: _ ->
+        if h.logicType.width > lt.width
+        then [err(h.location, s"Argument ${toString(top.argumentPosition)} type ${show(80, h.logicType.pp)} is wider than parameter type ${show(80, lt.pp)}")]
+        else t.argumentErrors
+    | [] -> [err(top.callLocation, s"Call expected ${toString(top.argumentPosition - 1)} arguments, got ${toString(top.argumentPosition + t.count)}")]
+    end;
+  
+  t.argumentPosition = 1 + top.argumentPosition;
+  t.expectedLogicTypes = tail(top.expectedLogicTypes);
+}
+
+abstract production nilLogicExpr
+top::LogicExprs ::= 
+{
+  top.pps = [];
+  top.host = nilExpr();
+  top.count = 0;
+  top.logicTypes = [];
+  top.errors := [];
+  
+  top.argumentErrors =
+    if !null(top.expectedLogicTypes)
+    then [err(top.callLocation, s"Call expected ${toString(top.argumentPosition + length(top.expectedLogicTypes) - 1)} arguments, got only ${toString(top.argumentPosition - 1)}")]
+    else []; 
 }

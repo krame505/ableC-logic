@@ -24,7 +24,7 @@ top::LogicStmts ::= result::LogicExpr
   top.errors := result.errors;
   top.errors <-
     if result.logicType.width > top.givenReturnLogicType.width
-    then [err(result.location, s"Result type ${show(80, result.logicType.pp)} is wider than declared ${show(80, top.givenReturnLogicType.pp)}")]
+    then [err(result.location, s"Result type ${show(80, result.logicType.pp)} is wider than declared type ${show(80, top.givenReturnLogicType.pp)}")]
     else [];
 }
 

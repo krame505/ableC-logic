@@ -1,10 +1,10 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:concretesyntax;
 
-terminal BitAppendOp_t ',' association=right, precedence=1, lexer classes {Csymbol};
+terminal MaxPrecLBracket_t /\[/ precedence=15, lexer classes {Csymbol};
 
 terminal LogicalNotOp_t '!' precedence=14, lexer classes {Csymbol};
 
-terminal MaxPrecLBracket_t /\[/ precedence=15, lexer classes {Csymbol};
+terminal BitAppendOp_t /,/ association=right, precedence=1, lexer classes {Csymbol};
 
 terminal LogicIdentifier_t /[A-Za-z_\$][A-Za-z_0-9\$]*/;
 
@@ -12,6 +12,11 @@ terminal True_t  'true'  dominates {LogicIdentifier_t};
 terminal False_t 'false' dominates {LogicIdentifier_t};
 
 terminal Range_t '..';
+
+-- Disambiguate inside function calls
+disambiguate Comma_t, BitAppendOp_t {
+  pluck Comma_t;
+}
 
 nonterminal LogicExpr_c with ast<LogicExpr>, location;
 
@@ -37,17 +42,29 @@ concrete productions top::LogicExpr_c
 
 | '(' e::LogicExpr_c ')'
   { top.ast = e.ast; }
-
-| e1::LogicExpr_c BitAppendOp_t e2::LogicExpr_c
-  { top.ast = bitAppendLogicExpr(e1.ast, e2.ast, location=top.location); }
-
-| LogicalNotOp_t e::LogicExpr_c
-  { top.ast = logicalNotLogicExpr(e.ast, location=top.location); }
   
+| f::LogicIdentifier_t '(' a::LogicExprs_c ')'
+  { top.ast = callLogicExpr(fromLogicId(f), a.ast, location=top.location); }
 | e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t ']'
   { top.ast = bitSelectLogicExpr(e.ast, toInt(i.lexeme), location=top.location); }
 | e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t '..' j::DecConstant_t ']'
   { top.ast = bitSelectRangeLogicExpr(e.ast, toInt(i.lexeme), toInt(j.lexeme), location=top.location); }
+
+| LogicalNotOp_t e::LogicExpr_c
+  { top.ast = logicalNotLogicExpr(e.ast, location=top.location); }
+
+| e1::LogicExpr_c BitAppendOp_t e2::LogicExpr_c
+  { top.ast = bitAppendLogicExpr(e1.ast, e2.ast, location=top.location); }
+
+nonterminal LogicExprs_c with ast<LogicExprs>;
+
+concrete productions top::LogicExprs_c
+| h::LogicExpr_c ',' t::LogicExprs_c
+  { top.ast = consLogicExpr(h.ast, t.ast); }
+| h::LogicExpr_c
+  { top.ast = consLogicExpr(h.ast, nilLogicExpr()); }
+| 
+  { top.ast = nilLogicExpr(); }
 
 function fromLogicId
 Name ::= n::LogicIdentifier_t
