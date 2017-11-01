@@ -1,7 +1,10 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:concretesyntax;
 
-terminal BitAppendOp_t ',' association=right, precedence=0, lexer classes {Csymbol};
-terminal MaxPrecLBracket_t '[' precedence=100, lexer classes {Csymbol}; -- Needed to avoid shift/reduce conflict
+terminal BitAppendOp_t ',' association=right, precedence=1, lexer classes {Csymbol};
+
+terminal LogicalNotOp_t '!' precedence=14, lexer classes {Csymbol};
+
+terminal MaxPrecLBracket_t /\[/ precedence=15, lexer classes {Csymbol};
 
 terminal LogicIdentifier_t /[A-Za-z_\$][A-Za-z_0-9\$]*/;
 
@@ -32,16 +35,19 @@ concrete productions top::LogicExpr_c
 | c::HexConstant_t
 | c::HexConstantU_t-}
 
-| e1::LogicExpr_c BitAppendOp_t e2::LogicExpr_c
-  { top.ast = bitAppendExpr(e1.ast, e2.ast, location=top.location); }
-  
-| e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t ']'
-  { top.ast = bitSelectExpr(e.ast, toInt(i.lexeme), location=top.location); }
-| e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t '..' j::DecConstant_t ']'
-  { top.ast = bitSelectRangeExpr(e.ast, toInt(i.lexeme), toInt(j.lexeme), location=top.location); }
-
 | '(' e::LogicExpr_c ')'
   { top.ast = e.ast; }
+
+| e1::LogicExpr_c BitAppendOp_t e2::LogicExpr_c
+  { top.ast = bitAppendLogicExpr(e1.ast, e2.ast, location=top.location); }
+
+| LogicalNotOp_t e::LogicExpr_c
+  { top.ast = logicalNotLogicExpr(e.ast, location=top.location); }
+  
+| e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t ']'
+  { top.ast = bitSelectLogicExpr(e.ast, toInt(i.lexeme), location=top.location); }
+| e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t '..' j::DecConstant_t ']'
+  { top.ast = bitSelectRangeLogicExpr(e.ast, toInt(i.lexeme), toInt(j.lexeme), location=top.location); }
 
 function fromLogicId
 Name ::= n::LogicIdentifier_t

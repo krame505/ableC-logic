@@ -2,6 +2,7 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 nonterminal LogicExpr with logicValueEnv, logicFunctionEnv, pp, host<Expr>, logicType, errors, location;
 
+-- Direct values
 abstract production boolConstantLogicExpr
 top::LogicExpr ::= value::Boolean
 {
@@ -52,7 +53,8 @@ top::LogicExpr ::= id::Name
   top.errors <- id.logicValueLookupCheck;
 }
 
-abstract production bitAppendExpr
+-- Custom bit manipulation constructs
+abstract production bitAppendLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 {
   top.pp = ppConcat([e1.pp, comma(), space(), e2.pp]);
@@ -74,7 +76,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.errors := e1.errors ++ e2.errors;
 }
 
-abstract production bitSelectExpr
+abstract production bitSelectLogicExpr
 top::LogicExpr ::= e::LogicExpr i::Integer
 {
   top.pp = pp"${e.pp}[${text(toString(i))})}]";
@@ -88,9 +90,13 @@ top::LogicExpr ::= e::LogicExpr i::Integer
       location=builtin);
   top.logicType = boolLogicType();
   top.errors := e.errors;
+  top.errors <-
+    if i < 0 || i >= e.logicType.width
+    then [err(top.location, s"Out of bounds bit index ${toString(i)} for ${show(80, e.logicType.pp)}")]
+    else [];
 }
 
-abstract production bitSelectRangeExpr
+abstract production bitSelectRangeLogicExpr
 top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
 {
   top.pp = pp"${e.pp}[${text(toString(i))}..${text(toString(j))}]";
@@ -103,5 +109,27 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
         location=builtin),
       location=builtin);
   top.logicType = intLogicType(false, j - i + 1);
+  top.errors := e.errors;
+  top.errors <-
+    if i < 0 || i >= e.logicType.width
+    then [err(top.location, s"Out of bounds lower bit index ${toString(i)} for ${show(80, e.logicType.pp)}")]
+    else [];
+  top.errors <-
+    if j < 0 || j >= e.logicType.width
+    then [err(top.location, s"Out of upper bit index ${toString(j)} for ${show(80, e.logicType.pp)}")]
+    else [];
+  top.errors <-
+    if i > j
+    then [err(top.location, s"Lower bit index ${toString(i)} must be less than upper bit index ${toString(j)}")]
+    else [];
+}
+
+-- Built-in C operators
+abstract production logicalNotLogicExpr
+top::LogicExpr ::= e::LogicExpr
+{
+  top.pp = parens( cat( text("!"), e.pp ) );
+  top.host = notExpr(e.host, location=top.location);
+  top.logicType = boolLogicType();
   top.errors := e.errors;
 }
