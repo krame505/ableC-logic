@@ -1,6 +1,6 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
-nonterminal LogicExpr with logicValueEnv, logicFunctionEnv, pp, host<Expr>, logicType, errors, logicFlowDefs, logicFlow, location;
+nonterminal LogicExpr with logicValueEnv, logicFunctionEnv, logicFlowEnv, pp, host<Expr>, logicType, errors, logicFlow, location;
 
 -- Direct values
 abstract production boolConstantLogicExpr
@@ -17,7 +17,6 @@ top::LogicExpr ::= value::Boolean
       location=top.location);
   top.logicType = boolLogicType();
   top.errors := [];
-  top.logicFlowDefs = [];
   top.logicFlow = [constantLogicFlowExpr(value)];
 }
 
@@ -35,7 +34,6 @@ top::LogicExpr ::= signed::Boolean bits::Bits
       location=top.location);
   top.logicType = intLogicType(signed, length(bits));
   top.errors := [];
-  top.logicFlowDefs = [];
   top.logicFlow = map(constantLogicFlowExpr, bits);
 }
 
@@ -53,9 +51,7 @@ top::LogicExpr ::= id::Name
   top.host = declRefExpr(id, location=top.location);
   top.logicType = id.logicValueItem.logicType;
   top.errors := [];
-  top.logicFlowDefs = [];
-  top.logicFlow =
-    map(\ i::Integer -> varLogicFlowExpr(id.name ++ toString(i)), range(0, top.logicType.width));
+  top.logicFlow = map(refLogicFlowExpr, id.logicFlowRef);
   
   top.errors <- id.logicValueLookupCheck;
 }
@@ -67,16 +63,7 @@ top::LogicExpr ::= f::Name a::LogicExprs
   top.host = directCallExpr(getLogicFunctionHostName(f), a.host, location=top.location);
   top.logicType = f.logicFunctionItem.returnLogicType;
   top.errors := a.errors;
-  
-  local callId::Integer = genInt();
-  local renameFn::(String ::= String) = \ n::String -> s"${f.name}_${n}_${toString(callId)}";
-  top.logicFlowDefs =
-    a.logicFlowDefs ++
-    renameLogicFlowDefs(renameFn, a.argumentLogicFlowDefs ++ f.logicFunctionItem.logicFlowDefs);
-  top.logicFlow =
-    map(
-      \ i::Integer ->
-        varLogicFlowExpr(renameFn("return" ++ toString(i))), range(0, top.logicType.width));
+  top.logicFlow = f.logicFunctionItem.logicFlowGraph(a.logicFlows);
   
   top.errors <- f.logicFunctionLookupCheck;
   top.errors <- if null(f.logicFunctionLookupCheck) then a.argumentErrors else [];
@@ -108,7 +95,6 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
       location=top.location);
   top.logicType = intLogicType(false, e1.logicType.width + e2.logicType.width);
   top.errors := e1.errors ++ e2.errors;
-  top.logicFlowDefs = e1.logicFlowDefs ++ e2.logicFlowDefs;
   top.logicFlow = e1.logicFlow ++ e2.logicFlow;
 }
 
@@ -126,7 +112,6 @@ top::LogicExpr ::= e::LogicExpr i::Integer
       location=builtin);
   top.logicType = boolLogicType();
   top.errors := e.errors;
-  top.logicFlowDefs = e.logicFlowDefs;
   top.logicFlow = [head(drop(i, e.logicFlow))];
   
   top.errors <-
@@ -149,7 +134,6 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
       location=builtin);
   top.logicType = intLogicType(false, j - i + 1);
   top.errors := e.errors;
-  top.logicFlowDefs = e.logicFlowDefs;
   top.logicFlow = take(j - i, drop(i, e.logicFlow));
   
   top.errors <-
@@ -174,7 +158,6 @@ top::LogicExpr ::= e::LogicExpr
   top.host = notExpr(e.host, location=top.location);
   top.logicType = boolLogicType();
   top.errors := e.errors;
-  top.logicFlowDefs = e.logicFlowDefs;
   top.logicFlow = [notLogicFlowExpr(foldr1(orLogicFlowExpr, e.logicFlow))];
 }
 
@@ -182,9 +165,7 @@ inherited attribute expectedParameterNames::[String];
 inherited attribute expectedLogicTypes::[LogicType];
 autocopy attribute callLocation::Location;
 
-synthesized attribute argumentLogicFlowDefs::[Pair<String LogicFlowExpr>];
-
-nonterminal LogicExprs with logicValueEnv, logicFunctionEnv, argumentPosition, expectedParameterNames, expectedLogicTypes, callLocation, pps, host<Exprs>, count, logicTypes, errors, argumentErrors, logicFlowDefs, logicFlows, argumentLogicFlowDefs;
+nonterminal LogicExprs with logicValueEnv, logicFunctionEnv, logicFlowEnv, argumentPosition, expectedParameterNames, expectedLogicTypes, callLocation, pps, host<Exprs>, count, logicTypes, errors, argumentErrors, logicFlows;
 
 abstract production consLogicExpr
 top::LogicExprs ::= h::LogicExpr t::LogicExprs
@@ -202,14 +183,7 @@ top::LogicExprs ::= h::LogicExpr t::LogicExprs
         else t.argumentErrors
     | [] -> [err(top.callLocation, s"Call expected ${toString(top.argumentPosition - 1)} arguments, got ${toString(top.argumentPosition + t.count)}")]
     end;
-  top.logicFlowDefs = h.logicFlowDefs ++ t.logicFlowDefs;
   top.logicFlows = h.logicFlow :: t.logicFlows;
-  top.argumentLogicFlowDefs =
-    zipWith(
-      \ i::Integer lfe::LogicFlowExpr -> pair(head(top.expectedParameterNames) ++ toString(i), lfe),
-      range(0, h.logicType.width),
-      h.logicFlow) ++
-    t.argumentLogicFlowDefs;
   
   t.argumentPosition = 1 + top.argumentPosition;
   t.expectedParameterNames = tail(top.expectedParameterNames);
@@ -224,9 +198,7 @@ top::LogicExprs ::=
   top.count = 0;
   top.logicTypes = [];
   top.errors := [];
-  top.logicFlowDefs = [];
   top.logicFlows = [];
-  top.argumentLogicFlowDefs = [];
   
   top.argumentErrors =
     if !null(top.expectedLogicTypes)

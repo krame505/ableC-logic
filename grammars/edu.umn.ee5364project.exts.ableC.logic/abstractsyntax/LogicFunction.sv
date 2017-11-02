@@ -57,7 +57,7 @@ synthesized attribute parameterNames::[String];
 synthesized attribute parameterLogicTypes::[LogicType];
 synthesized attribute returnLogicType::LogicType;
 
-nonterminal LogicFunctionDecl with logicFunctionEnv, pp, host<FunctionDecl>, logicFunctionDefs, errors, logicFlowDefs, name, parameterNames, parameterLogicTypes, returnLogicType, sourceLocation;
+nonterminal LogicFunctionDecl with logicFunctionEnv, pp, host<FunctionDecl>, logicFunctionDefs, errors, logicFlowGraph, name, parameterNames, parameterLogicTypes, returnLogicType, sourceLocation;
 
 abstract production logicFunctionDecl
 top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters body::LogicStmts
@@ -74,9 +74,9 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       getLogicFunctionHostName(id),
       nilAttribute(), nilDecl(),
       body.host);
-  top.logicFlowDefs = body.logicFlowDefs;
-  top.errors := ret.errors ++ params.errors ++ body.errors;
   top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
+  top.errors := ret.errors ++ params.errors ++ body.errors;
+  top.logicFlowGraph = buildFunctionLogicFlowGraph(_, top.logicFunctionEnv, params, body);
   
   top.name = id.name;
   top.parameterNames = params.names;
@@ -92,9 +92,20 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
   top.errors <- id.logicFunctionRedeclarationCheck;
 }
 
+function buildFunctionLogicFlowGraph
+[LogicFlowExpr] ::= paramLogicFlow::[[LogicFlowExpr]] logicFunctionEnv::Scopes<LogicFunctionItem> params::LogicParameters body::LogicStmts
+{
+  params.givenLogicFlows = paramLogicFlow;
+  body.logicFunctionEnv = logicFunctionEnv;
+  body.logicFlowEnv = addScope(params.logicFlowDefs, emptyScope());
+  return body.logicFlow;
+}
+
 synthesized attribute names::[String];
 
-nonterminal LogicParameters with logicValueEnv, pps, names, host<Parameters>, logicTypes, logicValueDefs, errors;
+inherited attribute givenLogicFlows::[[LogicFlowExpr]];
+
+nonterminal LogicParameters with logicValueEnv, givenLogicFlows, pps, names, host<Parameters>, logicTypes, logicValueDefs, errors, logicFlowDefs;
 
 abstract production consLogicParameter
 top::LogicParameters ::= h::LogicParameter  t::LogicParameters
@@ -105,8 +116,11 @@ top::LogicParameters ::= h::LogicParameter  t::LogicParameters
   top.logicTypes = h.logicType :: t.logicTypes;
   top.logicValueDefs = h.logicValueDefs ++ t.logicValueDefs;
   top.errors := h.errors ++ t.errors;
+  top.logicFlowDefs = h.logicFlowDefs ++ t.logicFlowDefs;
   
   t.logicValueEnv = addScope(h.logicValueDefs, h.logicValueEnv);
+  h.givenLogicFlow = head(top.givenLogicFlows);
+  t.givenLogicFlows = tail(top.givenLogicFlows);
 }
 
 abstract production nilLogicParameter
@@ -118,9 +132,12 @@ top::LogicParameters ::=
   top.logicTypes = [];
   top.logicValueDefs = [];
   top.errors := [];
+  top.logicFlowDefs = [];
 }
 
-nonterminal LogicParameter with logicValueEnv, pp, name, host<ParameterDecl>, logicType, logicValueDefs, errors;
+inherited attribute givenLogicFlow::[LogicFlowExpr];
+
+nonterminal LogicParameter with logicValueEnv, givenLogicFlow, pp, name, host<ParameterDecl>, logicType, logicValueDefs, errors, logicFlowDefs;
 
 abstract production logicParameter
 top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
@@ -131,6 +148,7 @@ top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
   top.logicType = typeExpr.logicType;
   top.logicValueDefs = [pair(id.name, logicValueItem(typeExpr.logicType, id.location))];
   top.errors := typeExpr.errors;
+  top.logicFlowDefs = [pair(id.name, decorateLogicFlow(top.givenLogicFlow))];
   
   top.errors <- id.logicValueRedeclarationCheck;
 }

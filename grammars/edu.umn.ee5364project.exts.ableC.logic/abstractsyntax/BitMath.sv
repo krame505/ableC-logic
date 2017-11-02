@@ -75,6 +75,12 @@ Bits ::= bs::Bits
   return incBits(notBits(bs));
 }
 
+function xor
+Boolean ::= a::Boolean b::Boolean
+{
+  return (a && !b) || (b && !a);
+}
+
 {-
 function addBits
 Bits ::= bs1::Bits bs2::Bits
@@ -114,16 +120,10 @@ Pair<Boolean Boolean> ::= a::Boolean b::Boolean c::Boolean
   return pair(upperRes.fst, lowerRes.fst);
 }
 
--}
-
-function xor
-Boolean ::= a::Boolean b::Boolean
-{
-  return (a && !b) || (b && !a);
-}
-
 function range
 [Integer] ::= min::Integer max::Integer
 {
   return if min < max then min :: range(min + 1, max) else [];
 }
+
+-}

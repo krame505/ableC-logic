@@ -20,11 +20,16 @@ top::LogicValueItem ::=
   top.sourceLocation = loc("nowhere", -1, -1, -1, -1, -1, -1);
 }
 
+-- Logic flow graphs for values
+-- Seperate scope from logicValueItem to avoid flow dependancy
+autocopy attribute logicFlowEnv::Scopes<[Decorated LogicFlowExpr]>;
+synthesized attribute logicFlowDefs::Contribs<[Decorated LogicFlowExpr]>;
+
 -- Logic functions
 autocopy attribute logicFunctionEnv::Scopes<LogicFunctionItem>;
 synthesized attribute logicFunctionDefs::Contribs<LogicFunctionItem>;
 
-nonterminal LogicFunctionItem with parameterNames, parameterLogicTypes, returnLogicType, logicFlowDefs, sourceLocation;
+nonterminal LogicFunctionItem with parameterNames, parameterLogicTypes, returnLogicType, logicFlowGraph, sourceLocation;
 
 abstract production logicFunctionItem
 top::LogicFunctionItem ::= f::Decorated LogicFunctionDecl
@@ -32,7 +37,7 @@ top::LogicFunctionItem ::= f::Decorated LogicFunctionDecl
   top.parameterNames = f.parameterNames;
   top.parameterLogicTypes = f.parameterLogicTypes;
   top.returnLogicType = f.returnLogicType;
-  top.logicFlowDefs = f.logicFlowDefs;
+  top.logicFlowGraph = f.logicFlowGraph;
   top.sourceLocation = f.sourceLocation;
 }
 
@@ -42,7 +47,7 @@ top::LogicFunctionItem ::=
   top.parameterNames = [];
   top.parameterLogicTypes = [];
   top.returnLogicType = errorLogicType();
-  top.logicFlowDefs = [];
+  top.logicFlowGraph = error("Demanded logic flow graph when function lookup failed"); -- No sensible default
   top.sourceLocation = loc("nowhere", -1, -1, -1, -1, -1, -1);
 }
 
@@ -111,7 +116,7 @@ top::ValueItem ::= env::Decorated Env  f::Decorated LogicFunctionDecl
 }
 
 -- General convinence stuff with Name
-attribute logicValueEnv, logicFunctionEnv occurs on Name;
+attribute logicValueEnv, logicFunctionEnv, logicFlowEnv occurs on Name;
 
 synthesized attribute logicValueRedeclarationCheck::[Message] occurs on Name;
 synthesized attribute logicFunctionRedeclarationCheck::[Message] occurs on Name;
@@ -121,6 +126,7 @@ synthesized attribute logicFunctionLookupCheck::[Message] occurs on Name;
 
 synthesized attribute logicValueItem::Decorated LogicValueItem occurs on Name;
 synthesized attribute logicFunctionItem::Decorated LogicFunctionItem occurs on Name;
+synthesized attribute logicFlowRef::[Decorated LogicFlowExpr] occurs on Name;
 
 aspect production name
 top::Name ::= n::String
@@ -144,6 +150,7 @@ top::Name ::= n::String
     
   local logicValues::[LogicValueItem] = lookupScope(n, top.logicValueEnv);
   local logicFunctions::[LogicFunctionItem] = lookupScope(n, top.logicFunctionEnv);
+  local logicFlowRefs::[[Decorated LogicFlowExpr]] = lookupScope(n, top.logicFlowEnv);
   top.logicValueLookupCheck =
     case logicValues of
     | [] -> [err(top.location, "Undeclared logic value " ++ n)]
@@ -159,6 +166,9 @@ top::Name ::= n::String
     if null(logicValues) then errorLogicValueItem() else head(logicValues);
   local logicFunction::LogicFunctionItem =
     if null(logicFunctions) then errorLogicFunctionItem() else head(logicFunctions);
+  local logicFlowRef::[Decorated LogicFlowExpr] =
+    if null(logicFunctions) then error("Demanded logic flow reference when lookup failed") else head(logicFlowRefs);
   top.logicValueItem = logicValue;
   top.logicFunctionItem = logicFunction;
+  top.logicFlowRef = logicFlowRef;
 }

@@ -2,18 +2,20 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 autocopy attribute givenReturnLogicType::LogicType;
 
-nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, logicFlowDefs;
+nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, logicFlowEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, logicFlowDefs, logicFlow;
 
 abstract production consLogicStmt
 top::LogicStmts ::= h::LogicStmt t::LogicStmts
 {
   top.pps = h.pp :: t.pps;
   top.host = seqStmt(h.host, t.host);
-  top.logicFlowDefs = h.logicFlowDefs ++ t.logicFlowDefs;
   top.logicValueDefs = h.logicValueDefs ++ t.logicValueDefs;
   top.errors := h.errors ++ t.errors;
+  top.logicFlowDefs = h.logicFlowDefs ++ t.logicFlowDefs;
+  top.logicFlow = t.logicFlow;
   
   t.logicValueEnv = addScope(h.logicValueDefs, top.logicValueEnv);
+  t.logicFlowEnv = addScope(h.logicFlowDefs, top.logicFlowEnv);
 }
 
 abstract production resultLogicStmt
@@ -21,13 +23,10 @@ top::LogicStmts ::= result::LogicExpr
 {
   top.pps = [pp"return ${result.pp};"];
   top.host = returnStmt(justExpr(result.host));
-  top.logicFlowDefs =
-    zipWith(
-      \ i::Integer lfe::LogicFlowExpr -> pair("return" ++ toString(i), lfe),
-      range(0, result.logicType.width),
-      result.logicFlow);
   top.logicValueDefs = [];
   top.errors := result.errors;
+  top.logicFlowDefs = [];
+  top.logicFlow = result.logicFlow;
   
   top.errors <-
     if result.logicType.width > top.givenReturnLogicType.width
@@ -35,7 +34,7 @@ top::LogicStmts ::= result::LogicExpr
     else [];
 }
 
-nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, host<Stmt>, logicValueDefs, errors, logicFlowDefs;
+nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, logicFlowEnv, pp, host<Stmt>, logicValueDefs, errors, logicFlowDefs;
 
 abstract production declLogicStmt
 top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
@@ -50,7 +49,7 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
           declarator(
             id,
             baseTypeExpr(),
-            nilAttribute(), 
+            nilAttribute(),
             justInitializer(
               exprInitializer(
                 explicitCastExpr(
@@ -58,13 +57,9 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
                   value.host,
                   location=builtin)))),
           nilDeclarator())));
-  top.logicFlowDefs =
-    zipWith(
-      \ i::Integer lfe::LogicFlowExpr -> pair(id.name ++ toString(i), lfe),
-      range(0, value.logicType.width),
-      value.logicFlow);
   top.logicValueDefs = [pair(id.name, logicValueItem(typeExpr.logicType, id.location))];
   top.errors := typeExpr.errors ++ value.errors;
+  top.logicFlowDefs = [pair(id.name, decorateLogicFlow(value.logicFlow))];
   
   top.errors <- id.logicValueRedeclarationCheck;
   top.errors <-
