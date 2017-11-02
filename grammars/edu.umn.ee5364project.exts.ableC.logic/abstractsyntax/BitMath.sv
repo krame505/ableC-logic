@@ -121,3 +121,9 @@ Boolean ::= a::Boolean b::Boolean
 {
   return (a && !b) || (b && !a);
 }
+
+function range
+[Integer] ::= min::Integer max::Integer
+{
+  return if min < max then min :: range(min + 1, max) else [];
+}

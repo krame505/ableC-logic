@@ -2,13 +2,14 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 autocopy attribute givenReturnLogicType::LogicType;
 
-nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors;
+nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, logicFlowDefs;
 
 abstract production consLogicStmt
 top::LogicStmts ::= h::LogicStmt t::LogicStmts
 {
   top.pps = h.pp :: t.pps;
   top.host = seqStmt(h.host, t.host);
+  top.logicFlowDefs = h.logicFlowDefs ++ t.logicFlowDefs;
   top.logicValueDefs = h.logicValueDefs ++ t.logicValueDefs;
   top.errors := h.errors ++ t.errors;
   
@@ -20,15 +21,21 @@ top::LogicStmts ::= result::LogicExpr
 {
   top.pps = [pp"return ${result.pp};"];
   top.host = returnStmt(justExpr(result.host));
+  top.logicFlowDefs =
+    zipWith(
+      \ i::Integer lfe::LogicFlowExpr -> pair("return" ++ toString(i), lfe),
+      range(0, result.logicType.width),
+      result.logicFlow);
   top.logicValueDefs = [];
   top.errors := result.errors;
+  
   top.errors <-
     if result.logicType.width > top.givenReturnLogicType.width
     then [err(result.location, s"Result type ${show(80, result.logicType.pp)} is wider than declared type ${show(80, top.givenReturnLogicType.pp)}")]
     else [];
 }
 
-nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, host<Stmt>, logicValueDefs, errors;
+nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, host<Stmt>, logicValueDefs, errors, logicFlowDefs;
 
 abstract production declLogicStmt
 top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
@@ -51,6 +58,11 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
                   value.host,
                   location=builtin)))),
           nilDeclarator())));
+  top.logicFlowDefs =
+    zipWith(
+      \ i::Integer lfe::LogicFlowExpr -> pair(id.name ++ toString(i), lfe),
+      range(0, value.logicType.width),
+      value.logicFlow);
   top.logicValueDefs = [pair(id.name, logicValueItem(typeExpr.logicType, id.location))];
   top.errors := typeExpr.errors ++ value.errors;
   

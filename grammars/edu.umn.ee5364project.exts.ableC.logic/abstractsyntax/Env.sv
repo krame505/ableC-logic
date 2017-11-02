@@ -24,21 +24,25 @@ top::LogicValueItem ::=
 autocopy attribute logicFunctionEnv::Scopes<LogicFunctionItem>;
 synthesized attribute logicFunctionDefs::Contribs<LogicFunctionItem>;
 
-nonterminal LogicFunctionItem with parameterLogicTypes, returnLogicType, sourceLocation;
+nonterminal LogicFunctionItem with parameterNames, parameterLogicTypes, returnLogicType, logicFlowDefs, sourceLocation;
 
 abstract production logicFunctionItem
 top::LogicFunctionItem ::= f::Decorated LogicFunctionDecl
 {
+  top.parameterNames = f.parameterNames;
   top.parameterLogicTypes = f.parameterLogicTypes;
   top.returnLogicType = f.returnLogicType;
+  top.logicFlowDefs = f.logicFlowDefs;
   top.sourceLocation = f.sourceLocation;
 }
 
 abstract production errorLogicFunctionItem
 top::LogicFunctionItem ::=
 {
+  top.parameterNames = [];
   top.parameterLogicTypes = [];
   top.returnLogicType = errorLogicType();
+  top.logicFlowDefs = [];
   top.sourceLocation = loc("nowhere", -1, -1, -1, -1, -1, -1);
 }
 

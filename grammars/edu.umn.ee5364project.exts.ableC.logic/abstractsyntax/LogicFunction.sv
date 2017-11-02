@@ -53,10 +53,11 @@ top::Expr ::= id::Name args::Exprs
   forwards to mkErrorCheck(localErrors, fwrd);
 }
 
+synthesized attribute parameterNames::[String];
 synthesized attribute parameterLogicTypes::[LogicType];
 synthesized attribute returnLogicType::LogicType;
 
-nonterminal LogicFunctionDecl with logicFunctionEnv, pp, host<FunctionDecl>, logicFunctionDefs, errors, name, parameterLogicTypes, returnLogicType, sourceLocation;
+nonterminal LogicFunctionDecl with logicFunctionEnv, pp, host<FunctionDecl>, logicFunctionDefs, errors, logicFlowDefs, name, parameterNames, parameterLogicTypes, returnLogicType, sourceLocation;
 
 abstract production logicFunctionDecl
 top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters body::LogicStmts
@@ -73,10 +74,12 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       getLogicFunctionHostName(id),
       nilAttribute(), nilDecl(),
       body.host);
-  top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
+  top.logicFlowDefs = body.logicFlowDefs;
   top.errors := ret.errors ++ params.errors ++ body.errors;
+  top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
   
   top.name = id.name;
+  top.parameterNames = params.names;
   top.parameterLogicTypes = params.logicTypes;
   top.returnLogicType = ret.logicType;
   top.sourceLocation = id.location;
@@ -89,12 +92,15 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
   top.errors <- id.logicFunctionRedeclarationCheck;
 }
 
-nonterminal LogicParameters with logicValueEnv, pps, host<Parameters>, logicTypes, logicValueDefs, errors;
+synthesized attribute names::[String];
+
+nonterminal LogicParameters with logicValueEnv, pps, names, host<Parameters>, logicTypes, logicValueDefs, errors;
 
 abstract production consLogicParameter
 top::LogicParameters ::= h::LogicParameter  t::LogicParameters
 {
   top.pps = h.pp :: t.pps;
+  top.names = h.name :: t.names;
   top.host = consParameters(h.host, t.host);
   top.logicTypes = h.logicType :: t.logicTypes;
   top.logicValueDefs = h.logicValueDefs ++ t.logicValueDefs;
@@ -107,18 +113,20 @@ abstract production nilLogicParameter
 top::LogicParameters ::=
 {
   top.pps = [];
+  top.names = [];
   top.host = nilParameters();
   top.logicTypes = [];
   top.logicValueDefs = [];
   top.errors := [];
 }
 
-nonterminal LogicParameter with logicValueEnv, pp, host<ParameterDecl>, logicType, logicValueDefs, errors;
+nonterminal LogicParameter with logicValueEnv, pp, name, host<ParameterDecl>, logicType, logicValueDefs, errors;
 
 abstract production logicParameter
 top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
 {
   top.pp = pp"${typeExpr.pp} ${id.pp}";
+  top.name = id.name;
   top.host = parameterDecl([], typeExpr.host, baseTypeExpr(), justName(id), nilAttribute());
   top.logicType = typeExpr.logicType;
   top.logicValueDefs = [pair(id.name, logicValueItem(typeExpr.logicType, id.location))];
