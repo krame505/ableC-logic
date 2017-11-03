@@ -2,7 +2,7 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 autocopy attribute givenReturnLogicType::LogicType;
 
-nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, logicFlowEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, logicFlowDefs, logicFlow;
+nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, logicFlowDefs, logicFlow;
 
 abstract production consLogicStmt
 top::LogicStmts ::= h::LogicStmt t::LogicStmts
@@ -15,7 +15,6 @@ top::LogicStmts ::= h::LogicStmt t::LogicStmts
   top.logicFlow = t.logicFlow;
   
   t.logicValueEnv = addScope(h.logicValueDefs, top.logicValueEnv);
-  t.logicFlowEnv = addScope(h.logicFlowDefs, top.logicFlowEnv);
 }
 
 abstract production resultLogicStmt
@@ -34,7 +33,7 @@ top::LogicStmts ::= result::LogicExpr
     else [];
 }
 
-nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, logicFlowEnv, pp, host<Stmt>, logicValueDefs, errors, logicFlowDefs;
+nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, host<Stmt>, logicValueDefs, errors, logicFlowDefs;
 
 abstract production declLogicStmt
 top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
@@ -59,7 +58,11 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
           nilDeclarator())));
   top.logicValueDefs = [pair(id.name, logicValueItem(typeExpr.logicType, id.location))];
   top.errors := typeExpr.errors ++ value.errors;
-  top.logicFlowDefs = [pair(id.name, decorateLogicFlow(value.logicFlow))];
+  top.logicFlowDefs =
+    zipWith(
+      \ i::Integer lfe::LogicFlowExpr -> pair(id.name ++ toString(i), lfe),
+      range(0, value.logicType.width),
+      value.logicFlow);
   
   top.errors <- id.logicValueRedeclarationCheck;
   top.errors <-

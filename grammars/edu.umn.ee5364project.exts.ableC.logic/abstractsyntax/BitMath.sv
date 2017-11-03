@@ -81,6 +81,12 @@ Boolean ::= a::Boolean b::Boolean
   return (a && !b) || (b && !a);
 }
 
+function range
+[Integer] ::= min::Integer max::Integer
+{
+  return if min < max then min :: range(min + 1, max) else [];
+}
+
 {-
 function addBits
 Bits ::= bs1::Bits bs2::Bits
@@ -118,12 +124,6 @@ Pair<Boolean Boolean> ::= a::Boolean b::Boolean c::Boolean
   local upperRes::Pair<Boolean Boolean> = halfAdd(a, b);
   local lowerRes::Pair<Boolean Boolean> = halfAdd(upperRes.snd, c);
   return pair(upperRes.fst, lowerRes.fst);
-}
-
-function range
-[Integer] ::= min::Integer max::Integer
-{
-  return if min < max then min :: range(min + 1, max) else [];
 }
 
 -}
