@@ -2,7 +2,7 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 autocopy attribute givenReturnLogicType::LogicType;
 
-nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, logicFlowDefs, logicFlowResult;
+nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, flowDefs, flowResult;
 
 abstract production consLogicStmt
 top::LogicStmts ::= h::LogicStmt t::LogicStmts
@@ -11,8 +11,8 @@ top::LogicStmts ::= h::LogicStmt t::LogicStmts
   top.host = seqStmt(h.host, t.host);
   top.logicValueDefs = h.logicValueDefs ++ t.logicValueDefs;
   top.errors := h.errors ++ t.errors;
-  top.logicFlowDefs = h.logicFlowDefs ++ t.logicFlowDefs;
-  top.logicFlowResult = t.logicFlowResult;
+  top.flowDefs = h.flowDefs ++ t.flowDefs;
+  top.flowResult = t.flowResult;
   
   t.logicValueEnv = addScope(h.logicValueDefs, top.logicValueEnv);
 }
@@ -24,8 +24,8 @@ top::LogicStmts ::= result::LogicExpr
   top.host = returnStmt(justExpr(result.host));
   top.logicValueDefs = [];
   top.errors := result.errors;
-  top.logicFlowDefs = result.logicFlowDefs;
-  top.logicFlowResult = result.logicFlowResult;
+  top.flowDefs = result.flowDefs;
+  top.flowResult = result.flowResult;
   
   top.errors <-
     if result.logicType.width > top.givenReturnLogicType.width
@@ -33,7 +33,7 @@ top::LogicStmts ::= result::LogicExpr
     else [];
 }
 
-nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, host<Stmt>, logicValueDefs, errors, logicFlowDefs;
+nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, host<Stmt>, logicValueDefs, logicType, errors, flowIds, flowDefs;
 
 abstract production declLogicStmt
 top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
@@ -56,9 +56,15 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
                   value.host,
                   location=builtin)))),
           nilDeclarator())));
-  top.logicValueDefs = [pair(id.name, logicValueItem(typeExpr.logicType, id.location))];
+  top.logicValueDefs = [pair(id.name, declLogicValueItem(top, id.location))];
+  top.logicType = typeExpr.logicType;
   top.errors := typeExpr.errors ++ value.errors;
-  top.logicFlowDefs = value.logicFlowDefs ++ [pair(id.name, value.logicFlowResult)];
+  top.flowIds =
+    map(
+      \ i::Integer -> s"${id.name}${toString(i)}_${toString(genInt())}",
+      range(0, typeExpr.logicType.width));
+  top.flowDefs =
+    value.flowDefs ++ zipWith(pair, top.flowIds, value.flowResult);
   
   top.errors <- id.logicValueRedeclarationCheck;
   top.errors <-

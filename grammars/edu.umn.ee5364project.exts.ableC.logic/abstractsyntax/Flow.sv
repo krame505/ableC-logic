@@ -3,132 +3,131 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 import silver:util:raw:treemap as tm;
 
 -- The flow computed for every bit of a logic expression
-synthesized attribute logicFlowResult::[LogicFlowExpr];
-synthesized attribute logicFlowResults::[[LogicFlowExpr]];
+synthesized attribute flowResult::[FlowExpr];
+synthesized attribute flowResults::[[FlowExpr]];
 -- The flow computed for every named bit, used to build the overall flow graph
-synthesized attribute logicFlowDefs::[Pair<String [LogicFlowExpr]>];
+synthesized attribute flowDefs::[Pair<String FlowExpr>];
 
-nonterminal LogicFlowGraph with pp, logicFlowDefs, logicFlowResult;
+nonterminal FlowGraph with pp, flowDefs, flowResult;
 
-abstract production logicFlowGraph
-top::LogicFlowGraph ::= logicFlowDefs::[Pair<String [LogicFlowExpr]>] logicFlowResult::[LogicFlowExpr]
+abstract production flowGraph
+top::FlowGraph ::= flowDefs::[Pair<String FlowExpr>] flowResult::[FlowExpr]
 {
   top.pp =
     ppImplode(
       line(),
       map(
-        \ item::Pair<String [LogicFlowExpr]> ->
-          pp"${text(item.fst)} = ${ppImplode(pp", ", map((.pp), item.snd))};",
-        logicFlowDefs) ++
-    [ppImplode(pp", ", map((.pp), logicFlowResult))]);
-  top.logicFlowDefs = logicFlowDefs;
-  top.logicFlowResult = logicFlowResult;
+        \ item::Pair<String FlowExpr> -> pp"${text(item.fst)} = ${item.snd.pp};", flowDefs) ++
+      [pp"return ${ppImplode(pp", ", map((.pp), flowResult))};"]);
+  top.flowDefs = flowDefs;
+  top.flowResult = flowResult;
 
-  local logicFlowEnv::tm:Map<String [Decorated LogicFlowExpr]> = tm:add(decLogicFlowDefs, tm:empty(compareString));
-  production decLogicFlowDefs::[Pair<String [Decorated LogicFlowExpr]>] =
+  local flowEnv::tm:Map<String Decorated FlowExpr> =
+    tm:add(decFlowDefs, tm:empty(compareString));
+  production decFlowDefs::[Pair<String Decorated FlowExpr>] =
     zipWith(
       pair,
-      map(fst, logicFlowDefs),
-      map(map(decorateLogicFlowExpr(logicFlowEnv, _), _), map(snd, logicFlowDefs)));
-  production decLogicFlow::[Decorated LogicFlowExpr] = map(decorateLogicFlowExpr(logicFlowEnv, _), logicFlowResult);
+      map(fst, flowDefs),
+      map(decorateFlowExpr(flowEnv, _), map(snd, flowDefs)));
+  production decFlow::[Decorated FlowExpr] =
+    map(decorateFlowExpr(flowEnv, _), flowResult);
 }
 
 -- The complete flow graph that is provided to each element of the graph as a Map
-autocopy attribute logicFlowEnv::tm:Map<String [Decorated LogicFlowExpr]>;
+autocopy attribute flowEnv::tm:Map<String Decorated FlowExpr>;
 
 -- Functor and supporting attributes for function stitching
-synthesized attribute renamed::LogicFlowExpr;
+synthesized attribute renamed::FlowExpr;
 autocopy attribute renameFn::(String ::= String);
 
-synthesized attribute paramSubstituted::LogicFlowExpr;
-autocopy attribute parameters::[[LogicFlowExpr]];
+synthesized attribute paramSubstituted::FlowExpr;
+autocopy attribute parameters::[[FlowExpr]];
 
-nonterminal LogicFlowExpr with logicFlowEnv, renameFn, parameters, pp, renamed, paramSubstituted;
-flowtype LogicFlowExpr = decorate {logicFlowEnv};
+nonterminal FlowExpr with flowEnv, renameFn, parameters, pp, renamed, paramSubstituted;
+flowtype FlowExpr = decorate {flowEnv};
 
-abstract production constantLogicFlowExpr
-top::LogicFlowExpr ::= b::Boolean
+abstract production constantFlowExpr
+top::FlowExpr ::= b::Boolean
 {
   propagate renamed, paramSubstituted;
   top.pp = if b then pp"true" else pp"false";
 }
 
-abstract production parameterLogicFlowExpr
-top::LogicFlowExpr ::= paramIndex::Integer bitIndex::Integer
+abstract production parameterFlowExpr
+top::FlowExpr ::= paramIndex::Integer bitIndex::Integer
 {
   propagate renamed;
-  top.pp = ppConcat([braces(text(toString(paramIndex))), brackets(text(toString(bitIndex)))]);
+  top.pp = cat(braces(text(toString(paramIndex))), brackets(text(toString(bitIndex))));
   top.paramSubstituted = head(drop(bitIndex, head(drop(paramIndex, top.parameters))));
 }
 
-abstract production nodeLogicFlowExpr
-top::LogicFlowExpr ::= id::String bitIndex::Integer
+abstract production nodeFlowExpr
+top::FlowExpr ::= id::String
 {
   propagate paramSubstituted;
-  top.pp = cat(text(id), brackets(text(toString(bitIndex))));
-  top.renamed = nodeLogicFlowExpr(top.renameFn(id), bitIndex);
+  top.pp = text(id);
+  top.renamed = nodeFlowExpr(top.renameFn(id));
   
-  production refNode::Decorated LogicFlowExpr =
-    head(drop(bitIndex, head(tm:lookup(id, top.logicFlowEnv))));
+  production refNode::Decorated FlowExpr = head(tm:lookup(id, top.flowEnv));
 }
 
-abstract production andLogicFlowExpr
-top::LogicFlowExpr ::= e1::LogicFlowExpr e2::LogicFlowExpr
+abstract production andFlowExpr
+top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
   propagate renamed, paramSubstituted;
   top.pp = pp"(${e1.pp} & ${e2.pp})";
 }
 
-abstract production orLogicFlowExpr
-top::LogicFlowExpr ::= e1::LogicFlowExpr e2::LogicFlowExpr
+abstract production orFlowExpr
+top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
   propagate renamed, paramSubstituted;
   top.pp = pp"(${e1.pp} | ${e2.pp})";
 }
 
-abstract production notLogicFlowExpr
-top::LogicFlowExpr ::= e::LogicFlowExpr
+abstract production notFlowExpr
+top::FlowExpr ::= e::FlowExpr
 {
   propagate renamed, paramSubstituted;
   top.pp = pp"(!${e.pp})";
 }
 
-function decorateLogicFlowExpr
-Decorated LogicFlowExpr ::= logicFlowEnv::tm:Map<String [Decorated LogicFlowExpr]> lfe::LogicFlowExpr
+function decorateFlowExpr
+Decorated FlowExpr ::= flowEnv::tm:Map<String Decorated FlowExpr> lfe::FlowExpr
 {
-  return decorate lfe with {logicFlowEnv = logicFlowEnv;};
+  return decorate lfe with {flowEnv = flowEnv;};
 }
 
-function renameLogicFlowExpr
-LogicFlowExpr ::= renameFn::(String ::= String) lfe::LogicFlowExpr
+function renameFlowExpr
+FlowExpr ::= renameFn::(String ::= String) lfe::FlowExpr
 {
   lfe.renameFn = renameFn;
   return lfe.renamed;
 }
 
-function renameLogicFlowDefs
-[Pair<String [LogicFlowExpr]>] ::= renameFn::(String ::= String) defs::[Pair<String [LogicFlowExpr]>]
+function renameFlowDefs
+[Pair<String FlowExpr>] ::= renameFn::(String ::= String) defs::[Pair<String FlowExpr>]
 {
   return
     zipWith(
       pair,
       map(renameFn, map(fst, defs)),
-      map(map(renameLogicFlowExpr(renameFn, _), _), map(snd, defs)));
+      map(renameFlowExpr(renameFn, _), map(snd, defs)));
 }
 
-function subParamsLogicFlowExpr
-LogicFlowExpr ::= params::[[LogicFlowExpr]] lfe::LogicFlowExpr
+function subParamsFlowExpr
+FlowExpr ::= params::[[FlowExpr]] lfe::FlowExpr
 {
   lfe.parameters = params;
   return lfe.paramSubstituted;
 }
 
-function subParamsLogicFlowDefs
-[Pair<String [LogicFlowExpr]>] ::= params::[[LogicFlowExpr]] defs::[Pair<String [LogicFlowExpr]>]
+function subParamsFlowDefs
+[Pair<String FlowExpr>] ::= params::[[FlowExpr]] defs::[Pair<String FlowExpr>]
 {
   return
     zipWith(
       pair,
       map(fst, defs),
-      map(map(subParamsLogicFlowExpr(params, _), _), map(snd, defs)));
+      map(subParamsFlowExpr(params, _), map(snd, defs)));
 }

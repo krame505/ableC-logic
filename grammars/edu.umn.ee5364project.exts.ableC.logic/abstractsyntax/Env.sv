@@ -4,19 +4,32 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 autocopy attribute logicValueEnv::Scopes<LogicValueItem>;
 synthesized attribute logicValueDefs::Contribs<LogicValueItem>;
 
-nonterminal LogicValueItem with logicType, sourceLocation;
+-- The flow ids introuduced by a declaration
+synthesized attribute flowIds::[String];
 
-abstract production logicValueItem
-top::LogicValueItem ::= logicType::LogicType sourceLocation::Location
+nonterminal LogicValueItem with logicType, flowIds, sourceLocation;
+
+abstract production declLogicValueItem
+top::LogicValueItem ::= decl::Decorated LogicStmt sourceLocation::Location
 {
-  top.logicType = logicType;
-  top.sourceLocation = top.sourceLocation;
+  top.logicType = decl.logicType;
+  top.flowIds = decl.flowIds;
+  top.sourceLocation = sourceLocation;
+}
+
+abstract production parameterLogicValueItem
+top::LogicValueItem ::= decl::Decorated LogicParameter sourceLocation::Location
+{
+  top.logicType = decl.logicType;
+  top.flowIds = decl.flowIds;
+  top.sourceLocation = sourceLocation;
 }
 
 abstract production errorLogicValueItem
 top::LogicValueItem ::=
 {
   top.logicType = errorLogicType();
+  top.flowIds = error("Demanded logic flow ids when value lookup failed"); -- No sensible default
   top.sourceLocation = loc("nowhere", -1, -1, -1, -1, -1, -1);
 }
 
@@ -24,14 +37,14 @@ top::LogicValueItem ::=
 autocopy attribute logicFunctionEnv::Scopes<LogicFunctionItem>;
 synthesized attribute logicFunctionDefs::Contribs<LogicFunctionItem>;
 
-nonterminal LogicFunctionItem with parameterLogicTypes, returnLogicType, logicFlowGraph, sourceLocation;
+nonterminal LogicFunctionItem with parameterLogicTypes, returnLogicType, flowGraph, sourceLocation;
 
 abstract production logicFunctionItem
 top::LogicFunctionItem ::= f::Decorated LogicFunctionDecl
 {
   top.parameterLogicTypes = f.parameterLogicTypes;
   top.returnLogicType = f.returnLogicType;
-  top.logicFlowGraph = f.logicFlowGraph;
+  top.flowGraph = f.flowGraph;
   top.sourceLocation = f.sourceLocation;
 }
 
@@ -40,7 +53,7 @@ top::LogicFunctionItem ::=
 {
   top.parameterLogicTypes = [];
   top.returnLogicType = errorLogicType();
-  top.logicFlowGraph = error("Demanded logic flow graph when function lookup failed"); -- No sensible default
+  top.flowGraph = error("Demanded logic flow graph when function lookup failed"); -- No sensible default
   top.sourceLocation = loc("nowhere", -1, -1, -1, -1, -1, -1);
 }
 

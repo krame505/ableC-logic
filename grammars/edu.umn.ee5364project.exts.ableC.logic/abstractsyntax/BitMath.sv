@@ -12,7 +12,10 @@ Bits ::= signed::Boolean value::Integer
   local negRes::Bits = help(-value, []);
   
   return
-    if signed
+    -- 0 technically has width 0, but we enforce that the width must always be >= 1
+    if value == 0
+    then [false]
+    else if signed
     then if value < 0
       then if head(negRes)
         then twosComplementBits(false :: negRes)

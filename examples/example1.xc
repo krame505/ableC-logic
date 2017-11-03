@@ -24,12 +24,24 @@ logic unsigned:16 lsh(unsigned:16 x) {
   return x[1..15], false;
 }
 
+logic unsigned:16 lsh3x(unsigned:16 x) {
+  return lsh(lsh(lsh(x)));
+}
+
+logic unsigned:16 lsh6x(unsigned:16 x) {
+  return lsh3x(lsh3x(x));
+}
+
 logic unsigned:8 bitNot8(unsigned:8 x) {
   return !x[0], !x[1], !x[2], !x[3], !x[4], !x[5], !x[6], !x[7];
 }
 
 logic unsigned:16 bitNot16(unsigned:16 x) {
   return bitNot8(x[0..7]), bitNot8(x[8..15]);
+}
+
+logic unsigned:16 baz(unsigned:8 x) {
+  return lsh(bitNot8(x));
 }
 
 /*
@@ -46,6 +58,7 @@ int main (int argc, char **argv) {
     x = lsh(x);
     printf("0x%x\n", x);
   }
+  printf("0x%x\n", lsh6x(0xAAAA));
 
   printf("0x%x\n", bitNot16(0x5555));
   printf("0x%x\n", bitNot16(bitNot16(0x5555)));
