@@ -3,47 +3,95 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 import silver:util:raw:treemap as tm;
 
 -- The flow computed for every bit of a logic expression
+-- TODO: Rename these?
 synthesized attribute flowResult::[FlowExpr];
 synthesized attribute flowResults::[[FlowExpr]];
 -- The flow computed for every named bit, used to build the overall flow graph
-synthesized attribute flowDefs::[Pair<String FlowExpr>];
+synthesized attribute flowDefs::[FlowDef];
 
-nonterminal FlowGraph with pp, flowDefs, flowResult;
+-- Used to build the flowEnv Map
+synthesized attribute flowContribs::[Pair<String Decorated FlowExpr>];
 
-abstract production flowGraph
-top::FlowGraph ::= flowDefs::[Pair<String FlowExpr>] flowResult::[FlowExpr]
-{
-  top.pp =
-    ppImplode(
-      line(),
-      map(
-        \ item::Pair<String FlowExpr> -> pp"${text(item.fst)} = ${item.snd.pp};", flowDefs) ++
-      [pp"return ${ppImplode(pp", ", map((.pp), flowResult))};"]);
-  top.flowDefs = flowDefs;
-  top.flowResult = flowResult;
-
-  local flowEnv::tm:Map<String Decorated FlowExpr> =
-    tm:add(decFlowDefs, tm:empty(compareString));
-  production decFlowDefs::[Pair<String Decorated FlowExpr>] =
-    zipWith(
-      pair,
-      map(fst, flowDefs),
-      map(decorateFlowExpr(flowEnv, _), map(snd, flowDefs)));
-  production decFlow::[Decorated FlowExpr] =
-    map(decorateFlowExpr(flowEnv, _), flowResult);
-}
-
--- The complete flow graph that is provided to each element of the graph as a Map
+-- The flow graph provided to each element of the graph as a Map
 autocopy attribute flowEnv::tm:Map<String Decorated FlowExpr>;
 
 -- Functor and supporting attributes for function stitching
-synthesized attribute renamed::FlowExpr;
+synthesized attribute renamed<a>::a;
 autocopy attribute renameFn::(String ::= String);
 
-synthesized attribute paramSubstituted::FlowExpr;
+synthesized attribute paramSubstituted<a>::a;
 autocopy attribute parameters::[[FlowExpr]];
 
-nonterminal FlowExpr with flowEnv, renameFn, parameters, pp, renamed, paramSubstituted;
+nonterminal FlowGraph with renameFn, parameters, pp, renamed<FlowGraph>, paramSubstituted<FlowGraph>, flowDefs, flowResult;
+flowtype FlowGraph = decorate {};
+
+abstract production flowGraph
+top::FlowGraph ::= flowDefs::FlowDefs flowResult::FlowExprs
+{
+  propagate renamed, paramSubstituted;
+  top.pp =
+    ppConcat([terminate(line(), flowDefs.pps), pp"return ${ppImplode(pp", ", flowResult.pps)};"]);
+  top.flowDefs = flowDefs.flowDefs;
+  top.flowResult = flowResult.flowResult;
+
+  flowDefs.flowEnv = tm:empty(compareString);
+  flowResult.flowEnv = tm:add(flowDefs.flowContribs, flowDefs.flowEnv);
+}
+
+nonterminal FlowDefs with flowEnv, renameFn, parameters, pps, renamed<FlowDefs>, paramSubstituted<FlowDefs>, flowDefs, flowContribs;
+flowtype FlowDefs = decorate {flowEnv};
+
+abstract production consFlowDef
+top::FlowDefs ::= h::FlowDef t::FlowDefs
+{
+  propagate renamed, paramSubstituted;
+  top.pps = h.pp :: t.pps;
+  top.flowDefs = h :: t.flowDefs;
+  top.flowContribs = h.flowContribs ++ t.flowContribs;
+  
+  t.flowEnv = tm:add(h.flowContribs, top.flowEnv);
+}
+
+abstract production nilFlowDef
+top::FlowDefs ::= 
+{
+  propagate renamed, paramSubstituted;
+  top.pps = [];
+  top.flowDefs = [];
+  top.flowContribs = [];
+}
+
+nonterminal FlowDef with flowEnv, renameFn, parameters, pp, renamed<FlowDef>, paramSubstituted<FlowDef>, flowContribs;
+flowtype FlowDef = decorate {flowEnv};
+
+abstract production flowDef
+top::FlowDef ::= id::String fe::FlowExpr
+{
+  propagate paramSubstituted;
+  top.pp = pp"${text(id)} = ${fe.pp};";
+  top.renamed = flowDef(top.renameFn(id), fe.renamed);
+  top.flowContribs = [pair(id, fe)];
+}
+
+nonterminal FlowExprs with flowEnv, renameFn, parameters, pps, renamed<FlowExprs>, paramSubstituted<FlowExprs>, flowResult;
+
+abstract production consFlowExpr
+top::FlowExprs ::= h::FlowExpr t::FlowExprs
+{
+  propagate renamed, paramSubstituted;
+  top.pps = h.pp :: t.pps;
+  top.flowResult = h :: t.flowResult;
+}
+
+abstract production nilFlowExpr
+top::FlowExprs ::= 
+{
+  propagate renamed, paramSubstituted;
+  top.pps = [];
+  top.flowResult = [];
+}
+
+nonterminal FlowExpr with flowEnv, renameFn, parameters, pp, renamed<FlowExpr>, paramSubstituted<FlowExpr>;
 flowtype FlowExpr = decorate {flowEnv};
 
 abstract production constantFlowExpr
@@ -92,42 +140,26 @@ top::FlowExpr ::= e::FlowExpr
   top.pp = pp"(!${e.pp})";
 }
 
-function decorateFlowExpr
-Decorated FlowExpr ::= flowEnv::tm:Map<String Decorated FlowExpr> lfe::FlowExpr
+-- Utility functions
+function renameFlowGraph
+FlowGraph ::= renameFn::(String ::= String) fg::FlowGraph
 {
-  return decorate lfe with {flowEnv = flowEnv;};
+  fg.renameFn = renameFn;
+  return fg.renamed;
 }
 
-function renameFlowExpr
-FlowExpr ::= renameFn::(String ::= String) lfe::FlowExpr
+function subParamsFlowGraph
+FlowGraph ::= parameters::[[FlowExpr]] fg::FlowGraph
 {
-  lfe.renameFn = renameFn;
-  return lfe.renamed;
+  fg.parameters = parameters;
+  return fg.paramSubstituted;
 }
 
-function renameFlowDefs
-[Pair<String FlowExpr>] ::= renameFn::(String ::= String) defs::[Pair<String FlowExpr>]
+function buildFlowGraph
+FlowGraph ::= flowDefs::[FlowDef] flowResult::[FlowExpr]
 {
   return
-    zipWith(
-      pair,
-      map(renameFn, map(fst, defs)),
-      map(renameFlowExpr(renameFn, _), map(snd, defs)));
-}
-
-function subParamsFlowExpr
-FlowExpr ::= params::[[FlowExpr]] lfe::FlowExpr
-{
-  lfe.parameters = params;
-  return lfe.paramSubstituted;
-}
-
-function subParamsFlowDefs
-[Pair<String FlowExpr>] ::= params::[[FlowExpr]] defs::[Pair<String FlowExpr>]
-{
-  return
-    zipWith(
-      pair,
-      map(fst, defs),
-      map(subParamsFlowExpr(params, _), map(snd, defs)));
+    flowGraph(
+      foldr(consFlowDef, nilFlowDef(), flowDefs),
+      foldr(consFlowExpr, nilFlowExpr(), flowResult));
 }

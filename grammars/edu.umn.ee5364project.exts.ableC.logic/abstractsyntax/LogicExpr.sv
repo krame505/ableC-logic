@@ -70,15 +70,12 @@ top::LogicExpr ::= f::Name a::LogicExprs
   
   local callId::Integer = genInt();
   local renameFn::(String ::= String) = \ n::String -> s"${f.name}_${n}_${toString(callId)}";
-  top.flowDefs =
-    a.flowDefs ++
-    subParamsFlowDefs(
+  local transformedFlowGraph::FlowGraph =
+    subParamsFlowGraph(
       a.argumentFlowResults,
-      renameFlowDefs(renameFn, f.logicFunctionItem.flowGraph.flowDefs));
-  top.flowResult =
-    map(
-      subParamsFlowExpr(a.argumentFlowResults, _),
-      map(renameFlowExpr(renameFn, _), f.logicFunctionItem.flowGraph.flowResult));
+      renameFlowGraph(renameFn, f.logicFunctionItem.flowGraph));
+  top.flowDefs = a.flowDefs ++ transformedFlowGraph.flowDefs;
+  top.flowResult = transformedFlowGraph.flowResult;
   
   a.argumentPosition = 1;
   a.expectedLogicTypes = f.logicFunctionItem.parameterLogicTypes;

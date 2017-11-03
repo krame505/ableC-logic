@@ -63,8 +63,7 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
     map(
       \ i::Integer -> s"${id.name}${toString(i)}_${toString(genInt())}",
       range(0, typeExpr.logicType.width));
-  top.flowDefs =
-    value.flowDefs ++ zipWith(pair, top.flowIds, value.flowResult);
+  top.flowDefs = value.flowDefs ++ zipWith(flowDef, top.flowIds, value.flowResult);
   
   top.errors <- id.logicValueRedeclarationCheck;
   top.errors <-

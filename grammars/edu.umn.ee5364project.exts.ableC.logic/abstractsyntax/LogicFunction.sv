@@ -78,7 +78,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       body.host);
   top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
   top.errors := ret.errors ++ params.errors ++ body.errors;
-  top.flowGraph = flowGraph(params.flowDefs ++ body.flowDefs, body.flowResult);
+  top.flowGraph = buildFlowGraph(params.flowDefs ++ body.flowDefs, body.flowResult);
   
   top.name = id.name;
   top.parameterLogicTypes = params.logicTypes;
@@ -141,7 +141,7 @@ top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
       range(0, typeExpr.logicType.width));
   top.flowDefs =
     zipWith(
-      pair,
+      flowDef,
       top.flowIds,
       map(parameterFlowExpr(top.index, _), range(0, typeExpr.logicType.width)));
   
