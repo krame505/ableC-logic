@@ -25,7 +25,7 @@ top::Decl ::= f::LogicFunctionDecl
   forwards to
     decls(
       foldDecl([
-        txtDecl(s"/*\n${implode("\n", map(\ item::Pair<String LogicFlowExpr> -> s"${item.fst} = ${show(80, item.snd.pp)};", f.logicFlowDefs) ++ [show(80, ppImplode(pp", ", map((.pp), f.logicFlow)))])}\n*/"),
+        txtDecl(s"/*\n${show(80, f.logicFlowGraph.pp)}\n*/"),
         if !null(localErrors) then decls(foldDecl([warnDecl(localErrors), errorFwrd])) else fwrd,
         defsDecl(
           valueDef(f.name, logicFunctionValueItem(top.env, f)) ::
@@ -54,11 +54,11 @@ top::Expr ::= id::Name args::Exprs
   forwards to mkErrorCheck(localErrors, fwrd);
 }
 
-synthesized attribute parameterNames::[String];
+synthesized attribute logicFlowGraph::LogicFlowGraph;
 synthesized attribute parameterLogicTypes::[LogicType];
 synthesized attribute returnLogicType::LogicType;
 
-nonterminal LogicFunctionDecl with logicFunctionEnv, pp, host<FunctionDecl>, logicFunctionDefs, errors, logicFlowDefs, logicFlow, name, parameterLogicTypes, returnLogicType, sourceLocation;
+nonterminal LogicFunctionDecl with logicFunctionEnv, pp, host<FunctionDecl>, logicFunctionDefs, errors, logicFlowGraph, name, parameterLogicTypes, returnLogicType, sourceLocation;
 
 abstract production logicFunctionDecl
 top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters body::LogicStmts
@@ -77,8 +77,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       body.host);
   top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
   top.errors := ret.errors ++ params.errors ++ body.errors;
-  top.logicFlowDefs = params.logicFlowDefs ++ body.logicFlowDefs;
-  top.logicFlow = body.logicFlow;
+  top.logicFlowGraph = logicFlowGraph(params.logicFlowDefs ++ body.logicFlowDefs, body.logicFlowResult);
   
   top.name = id.name;
   top.parameterLogicTypes = params.logicTypes;
@@ -136,9 +135,7 @@ top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
   top.logicValueDefs = [pair(id.name, logicValueItem(typeExpr.logicType, id.location))];
   top.errors := typeExpr.errors;
   top.logicFlowDefs =
-    map(
-      \ i::Integer -> pair(id.name, parameterLogicFlowExpr(top.index, i)),
-      range(0, typeExpr.logicType.width));
+    [pair(id.name, map(parameterLogicFlowExpr(top.index, _), range(0, typeExpr.logicType.width)))];
   
   top.errors <- id.logicValueRedeclarationCheck;
 }
