@@ -165,6 +165,7 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
 }
 
 -- Built-in C operators
+-- TODO: Binary flat-fold flow translation for logic ops
 abstract production logicalNotLogicExpr
 top::LogicExpr ::= e::LogicExpr
 {
@@ -174,6 +175,38 @@ top::LogicExpr ::= e::LogicExpr
   top.errors := e.errors;
   top.flowDefs = e.flowDefs;
   top.flowResult = [notFlowExpr(foldr1(orFlowExpr, e.flowResult))];
+}
+
+abstract production logicalAndLogicExpr
+top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
+{
+  top.pp = pp"(${e1.pp} && ${e2.pp})"; 
+  top.host =
+    explicitCastExpr(
+      typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
+      andExpr(e1.host, e2.host, location=top.location),
+      location=top.location);
+  top.logicType = boolLogicType();
+  top.errors := e1.errors ++ e2.errors;
+  top.flowDefs = e1.flowDefs ++ e2.flowDefs;
+  top.flowResult =
+    [andFlowExpr(foldr1(orFlowExpr, e1.flowResult), foldr1(orFlowExpr, e2.flowResult))];
+}
+
+abstract production logicalOrLogicExpr
+top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
+{
+  top.pp = pp"(${e1.pp} || ${e2.pp})"; 
+  top.host =
+    explicitCastExpr(
+      typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
+      orExpr(e1.host, e2.host, location=top.location),
+      location=top.location);
+  top.logicType = boolLogicType();
+  top.errors := e1.errors ++ e2.errors;
+  top.flowDefs = e1.flowDefs ++ e2.flowDefs;
+  top.flowResult =
+    [orFlowExpr(foldr1(orFlowExpr, e1.flowResult), foldr1(orFlowExpr, e2.flowResult))];
 }
 
 inherited attribute expectedParameterNames::[String];

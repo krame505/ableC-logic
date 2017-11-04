@@ -24,6 +24,10 @@ logic unsigned:16 lsh(unsigned:16 x) {
   return x[1..15], false;
 }
 
+logic unsigned:16 rsh(unsigned:16 x) {
+  return false, x[0..14];
+}
+
 logic unsigned:16 lsh3x(unsigned:16 x) {
   return lsh(lsh(lsh(x)));
 }
@@ -44,11 +48,14 @@ logic unsigned:16 baz(unsigned:8 x) {
   return lsh(bitNot8(x));
 }
 
-/*
-logic signed:16 arsh(unsigned:16 x) {
-  return 
+logic signed:16 arsh(signed:16 x) {
+  return x[0], x[0..14];
 }
-*/
+
+logic unsigned:2 halfAdd(bool x, bool y) {
+  return x && !y || !x && y, x && y;
+}
+
 int main (int argc, char **argv) {
 
   printf("0x%x\n", foo(12, true));
@@ -58,10 +65,27 @@ int main (int argc, char **argv) {
     x = lsh(x);
     printf("0x%x\n", x);
   }
+  x = 0x8000;
+  printf("0x%x\n", x);
+  for (int i = 0; i < 17; i++) {
+    x = rsh(x);
+    printf("0x%x\n", x);
+  }
+  x = 0x8000;
+  printf("0x%x\n", x);
+  for (int i = 0; i < 17; i++) {
+    x = arsh(x);
+    printf("0x%x\n", x);
+  }
   printf("0x%x\n", lsh6x(0xAAAA));
 
   printf("0x%x\n", bitNot16(0x5555));
   printf("0x%x\n", bitNot16(bitNot16(0x5555)));
+
+  printf("%x\n", halfAdd(false, false));
+  printf("%x\n", halfAdd(false, true));
+  printf("%x\n", halfAdd(true, false));
+  printf("%x\n", halfAdd(true, true));
   
   return 0; 
 }

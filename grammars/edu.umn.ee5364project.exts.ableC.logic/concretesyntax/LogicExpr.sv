@@ -4,6 +4,10 @@ terminal MaxPrecLBracket_t /\[/ precedence=15, lexer classes {Csymbol};
 
 terminal LogicalNotOp_t '!' precedence=14, lexer classes {Csymbol};
 
+terminal LogicalAndOp_t '&&' association=left, precedence=5, lexer classes {Csymbol};
+
+terminal LogicalOrOp_t '||' association=left, precedence=4, lexer classes {Csymbol};
+
 terminal BitAppendOp_t /,/ association=right, precedence=1, lexer classes {Csymbol};
 
 terminal LogicIdentifier_t /[A-Za-z_\$][A-Za-z_0-9\$]*/;
@@ -52,6 +56,12 @@ concrete productions top::LogicExpr_c
 
 | LogicalNotOp_t e::LogicExpr_c
   { top.ast = logicalNotLogicExpr(e.ast, location=top.location); }
+  
+| e1::LogicExpr_c LogicalAndOp_t e2::LogicExpr_c
+  { top.ast = logicalAndLogicExpr(e1.ast, e2.ast, location=top.location); }
+  
+| e1::LogicExpr_c LogicalOrOp_t e2::LogicExpr_c
+  { top.ast = logicalOrLogicExpr(e1.ast, e2.ast, location=top.location); }
 
 | e1::LogicExpr_c BitAppendOp_t e2::LogicExpr_c
   { top.ast = bitAppendLogicExpr(e1.ast, e2.ast, location=top.location); }
