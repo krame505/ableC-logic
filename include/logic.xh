@@ -14,7 +14,7 @@ typedef _Bool bool;
 const bool true = 1;
 const bool false = 0;
 
-// Define macros in case these are checked for existance prior to being defined
+// Define macros in case these are checked for existance prior to being defined in other places
 #define bool bool
 #define true true
 #define false false

@@ -56,6 +56,14 @@ logic unsigned:2 halfAdd(bool x, bool y) {
   return x && !y || !x && y, x && y;
 }
 
+logic signed:16 foo1(signed:16 x) {
+  return x[0..14], !x[15];
+}
+
+logic signed:16 bar1(signed:8 x) {
+  return foo1(x);
+}
+
 int main (int argc, char **argv) {
 
   printf("0x%x\n", foo(12, true));
@@ -86,6 +94,9 @@ int main (int argc, char **argv) {
   printf("%x\n", halfAdd(false, true));
   printf("%x\n", halfAdd(true, false));
   printf("%x\n", halfAdd(true, true));
+  
+  printf("%d\n", bar1(5));
+  printf("%d\n", bar1(-5));
   
   return 0; 
 }
