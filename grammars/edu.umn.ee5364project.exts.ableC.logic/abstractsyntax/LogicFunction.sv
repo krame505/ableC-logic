@@ -78,7 +78,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       body.host);
   top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
   top.errors := ret.errors ++ params.errors ++ body.errors;
-  top.flowGraph = buildFlowGraph(params.flowDefs ++ body.flowDefs, body.flowResult);
+  top.flowGraph = buildFlowGraph(params.flowDefs ++ body.flowDefs, body.flowExprs);
   
   top.name = id.name;
   top.parameterLogicTypes = params.logicTypes;
@@ -86,7 +86,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
   top.sourceLocation = id.location;
   
   params.logicValueEnv = emptyScope();
-  params.index = 0;
+  params.bitIndex = 0;
   body.logicValueEnv = addScope(params.logicValueDefs, params.logicValueEnv);
   body.logicFunctionEnv = openScope(top.logicFunctionEnv); -- In case we ever add nested logic functions I guess?
   body.givenReturnLogicType = ret.logicType;
@@ -94,9 +94,9 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
   top.errors <- id.logicFunctionRedeclarationCheck;
 }
 
-inherited attribute index::Integer; -- Initially 0
+inherited attribute bitIndex::Integer; -- Initially 0
 
-nonterminal LogicParameters with logicValueEnv, index, pps, host<Parameters>, logicTypes, logicValueDefs, errors, flowDefs;
+nonterminal LogicParameters with logicValueEnv, bitIndex, pps, host<Parameters>, logicTypes, logicValueDefs, errors, flowDefs;
 
 abstract production consLogicParameter
 top::LogicParameters ::= h::LogicParameter  t::LogicParameters
@@ -109,8 +109,8 @@ top::LogicParameters ::= h::LogicParameter  t::LogicParameters
   top.flowDefs = h.flowDefs ++ t.flowDefs;
   
   t.logicValueEnv = addScope(h.logicValueDefs, h.logicValueEnv);
-  h.index = top.index;
-  t.index = top.index + 1;
+  h.bitIndex = top.bitIndex;
+  t.bitIndex = top.bitIndex + h.logicType.width;
 }
 
 abstract production nilLogicParameter
@@ -124,7 +124,7 @@ top::LogicParameters ::=
   top.flowDefs = [];
 }
 
-nonterminal LogicParameter with logicValueEnv, index, pp, name, host<ParameterDecl>, logicType, logicValueDefs, errors, flowIds, flowDefs;
+nonterminal LogicParameter with logicValueEnv, bitIndex, pp, name, host<ParameterDecl>, logicType, logicValueDefs, errors, flowIds, flowDefs;
 
 abstract production logicParameter
 top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
@@ -143,7 +143,7 @@ top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
     zipWith(
       flowDef,
       top.flowIds,
-      map(parameterFlowExpr(top.index, _), range(0, typeExpr.logicType.width)));
+      map(parameterFlowExpr, range(top.bitIndex, top.bitIndex + typeExpr.logicType.width)));
   
   top.errors <- id.logicValueRedeclarationCheck;
 }

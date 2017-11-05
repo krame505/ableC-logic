@@ -2,7 +2,7 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 autocopy attribute givenReturnLogicType::LogicType;
 
-nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, flowDefs, flowResult;
+nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, flowDefs, flowExprs;
 
 abstract production consLogicStmt
 top::LogicStmts ::= h::LogicStmt t::LogicStmts
@@ -12,7 +12,7 @@ top::LogicStmts ::= h::LogicStmt t::LogicStmts
   top.logicValueDefs = h.logicValueDefs ++ t.logicValueDefs;
   top.errors := h.errors ++ t.errors;
   top.flowDefs = h.flowDefs ++ t.flowDefs;
-  top.flowResult = t.flowResult;
+  top.flowExprs = t.flowExprs;
   
   t.logicValueEnv = addScope(h.logicValueDefs, top.logicValueEnv);
 }
@@ -25,7 +25,7 @@ top::LogicStmts ::= result::LogicExpr
   top.logicValueDefs = [];
   top.errors := result.errors;
   top.flowDefs = result.flowDefs;
-  top.flowResult = result.flowResult;
+  top.flowExprs = result.flowExprs;
   
   top.errors <-
     if result.logicType.width > top.givenReturnLogicType.width
@@ -63,7 +63,7 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
     map(
       \ i::Integer -> s"${id.name}${toString(i)}_${toString(genInt())}",
       range(0, typeExpr.logicType.width));
-  top.flowDefs = value.flowDefs ++ zipWith(flowDef, top.flowIds, value.flowResult);
+  top.flowDefs = value.flowDefs ++ zipWith(flowDef, top.flowIds, value.flowExprs);
   
   top.errors <- id.logicValueRedeclarationCheck;
   top.errors <-

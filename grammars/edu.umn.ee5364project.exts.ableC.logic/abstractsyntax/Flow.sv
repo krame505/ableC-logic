@@ -3,9 +3,7 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 import silver:util:raw:treemap as tm;
 
 -- The flow computed for every bit of a logic expression
--- TODO: Rename these?
-synthesized attribute flowResult::[FlowExpr];
-synthesized attribute flowResults::[[FlowExpr]];
+synthesized attribute flowExprs::[FlowExpr];
 -- The flow computed for every named bit, used to build the overall flow graph
 synthesized attribute flowDefs::[FlowDef];
 
@@ -20,22 +18,22 @@ synthesized attribute renamed<a>::a;
 autocopy attribute renameFn::(String ::= String);
 
 synthesized attribute paramSubstituted<a>::a;
-autocopy attribute parameters::[[FlowExpr]];
+autocopy attribute parameters::[FlowExpr];
 
-nonterminal FlowGraph with renameFn, parameters, pp, renamed<FlowGraph>, paramSubstituted<FlowGraph>, flowDefs, flowResult;
+nonterminal FlowGraph with renameFn, parameters, pp, renamed<FlowGraph>, paramSubstituted<FlowGraph>, flowDefs, flowExprs;
 flowtype FlowGraph = decorate {};
 
 abstract production flowGraph
-top::FlowGraph ::= flowDefs::FlowDefs flowResult::FlowExprs
+top::FlowGraph ::= flowDefs::FlowDefs flowExprs::FlowExprs
 {
   propagate renamed, paramSubstituted;
   top.pp =
-    ppConcat([terminate(line(), flowDefs.pps), pp"return ${ppImplode(pp", ", flowResult.pps)};"]);
+    ppConcat([terminate(line(), flowDefs.pps), pp"return ${ppImplode(pp", ", flowExprs.pps)};"]);
   top.flowDefs = flowDefs.flowDefs;
-  top.flowResult = flowResult.flowResult;
+  top.flowExprs = flowExprs.flowExprs;
 
   flowDefs.flowEnv = tm:empty(compareString);
-  flowResult.flowEnv = tm:add(flowDefs.flowContribs, flowDefs.flowEnv);
+  flowExprs.flowEnv = tm:add(flowDefs.flowContribs, flowDefs.flowEnv);
 }
 
 nonterminal FlowDefs with flowEnv, renameFn, parameters, pps, renamed<FlowDefs>, paramSubstituted<FlowDefs>, flowDefs, flowContribs;
@@ -73,14 +71,14 @@ top::FlowDef ::= id::String fe::FlowExpr
   top.flowContribs = [pair(id, fe)];
 }
 
-nonterminal FlowExprs with flowEnv, renameFn, parameters, pps, renamed<FlowExprs>, paramSubstituted<FlowExprs>, flowResult;
+nonterminal FlowExprs with flowEnv, renameFn, parameters, pps, renamed<FlowExprs>, paramSubstituted<FlowExprs>, flowExprs;
 
 abstract production consFlowExpr
 top::FlowExprs ::= h::FlowExpr t::FlowExprs
 {
   propagate renamed, paramSubstituted;
   top.pps = h.pp :: t.pps;
-  top.flowResult = h :: t.flowResult;
+  top.flowExprs = h :: t.flowExprs;
 }
 
 abstract production nilFlowExpr
@@ -88,7 +86,7 @@ top::FlowExprs ::=
 {
   propagate renamed, paramSubstituted;
   top.pps = [];
-  top.flowResult = [];
+  top.flowExprs = [];
 }
 
 nonterminal FlowExpr with flowEnv, renameFn, parameters, pp, renamed<FlowExpr>, paramSubstituted<FlowExpr>;
@@ -102,11 +100,11 @@ top::FlowExpr ::= b::Boolean
 }
 
 abstract production parameterFlowExpr
-top::FlowExpr ::= paramIndex::Integer bitIndex::Integer
+top::FlowExpr ::= i::Integer
 {
   propagate renamed;
-  top.pp = cat(braces(text(toString(paramIndex))), brackets(text(toString(bitIndex))));
-  top.paramSubstituted = head(drop(bitIndex, head(drop(paramIndex, top.parameters))));
+  top.pp = brackets(text(toString(i)));
+  top.paramSubstituted = head(drop(i, top.parameters));
 }
 
 abstract production nodeFlowExpr
@@ -149,17 +147,17 @@ FlowGraph ::= renameFn::(String ::= String) fg::FlowGraph
 }
 
 function subParamsFlowGraph
-FlowGraph ::= parameters::[[FlowExpr]] fg::FlowGraph
+FlowGraph ::= parameters::[FlowExpr] fg::FlowGraph
 {
   fg.parameters = parameters;
   return fg.paramSubstituted;
 }
 
 function buildFlowGraph
-FlowGraph ::= flowDefs::[FlowDef] flowResult::[FlowExpr]
+FlowGraph ::= flowDefs::[FlowDef] flowExprs::[FlowExpr]
 {
   return
     flowGraph(
       foldr(consFlowDef, nilFlowDef(), flowDefs),
-      foldr(consFlowExpr, nilFlowExpr(), flowResult));
+      foldr(consFlowExpr, nilFlowExpr(), flowExprs));
 }

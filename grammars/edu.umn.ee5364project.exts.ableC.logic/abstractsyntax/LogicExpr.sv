@@ -1,6 +1,6 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
-nonterminal LogicExpr with logicValueEnv, logicFunctionEnv, pp, host<Expr>, logicType, errors, flowDefs, flowResult, location;
+nonterminal LogicExpr with logicValueEnv, logicFunctionEnv, pp, host<Expr>, logicType, errors, flowDefs, flowExprs, location;
 
 -- Direct values
 abstract production boolConstantLogicExpr
@@ -18,7 +18,7 @@ top::LogicExpr ::= value::Boolean
   top.logicType = boolLogicType();
   top.errors := [];
   top.flowDefs = [];
-  top.flowResult = [constantFlowExpr(value)];
+  top.flowExprs = [constantFlowExpr(value)];
 }
 
 abstract production intConstantLogicExpr
@@ -36,7 +36,7 @@ top::LogicExpr ::= signed::Boolean bits::Bits
   top.logicType = intLogicType(signed, length(bits));
   top.errors := [];
   top.flowDefs = [];
-  top.flowResult = map(constantFlowExpr, bits);
+  top.flowExprs = map(constantFlowExpr, bits);
 }
 
 abstract production intLiteralLogicExpr
@@ -54,7 +54,7 @@ top::LogicExpr ::= id::Name
   top.logicType = id.logicValueItem.logicType;
   top.errors := [];
   top.flowDefs = [];
-  top.flowResult =
+  top.flowExprs =
     map(\ id::String -> nodeFlowExpr(id), id.logicValueItem.flowIds);
   
   top.errors <- id.logicValueLookupCheck;
@@ -72,10 +72,10 @@ top::LogicExpr ::= f::Name a::LogicExprs
   local renameFn::(String ::= String) = \ n::String -> s"${f.name}_${n}_${toString(callId)}";
   local transformedFlowGraph::FlowGraph =
     subParamsFlowGraph(
-      a.argumentFlowResults,
+      a.argumentFlowExprs,
       renameFlowGraph(renameFn, f.logicFunctionItem.flowGraph));
   top.flowDefs = a.flowDefs ++ transformedFlowGraph.flowDefs;
-  top.flowResult = transformedFlowGraph.flowResult;
+  top.flowExprs = transformedFlowGraph.flowExprs;
   
   a.argumentPosition = 1;
   a.expectedLogicTypes = f.logicFunctionItem.parameterLogicTypes;
@@ -107,7 +107,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.logicType = intLogicType(false, e1.logicType.width + e2.logicType.width);
   top.errors := e1.errors ++ e2.errors;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
-  top.flowResult = e1.flowResult ++ e2.flowResult;
+  top.flowExprs = e1.flowExprs ++ e2.flowExprs;
 }
 
 abstract production bitSelectLogicExpr
@@ -125,7 +125,7 @@ top::LogicExpr ::= e::LogicExpr i::Integer
   top.logicType = boolLogicType();
   top.errors := e.errors;
   top.flowDefs = e.flowDefs;
-  top.flowResult = [head(drop(i, e.flowResult))];
+  top.flowExprs = [head(drop(i, e.flowExprs))];
   
   top.errors <-
     if i < 0 || i >= e.logicType.width
@@ -148,7 +148,7 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
   top.logicType = intLogicType(false, j - i + 1);
   top.errors := e.errors;
   top.flowDefs = e.flowDefs;
-  top.flowResult = take(j - i + 1, drop(i, e.flowResult));
+  top.flowExprs = take(j - i + 1, drop(i, e.flowExprs));
   
   top.errors <-
     if i < 0 || i >= e.logicType.width
@@ -174,7 +174,7 @@ top::LogicExpr ::= e::LogicExpr
   top.logicType = boolLogicType();
   top.errors := e.errors;
   top.flowDefs = e.flowDefs;
-  top.flowResult = [notFlowExpr(foldr1(orFlowExpr, e.flowResult))];
+  top.flowExprs = [notFlowExpr(foldr1(orFlowExpr, e.flowExprs))];
 }
 
 abstract production logicalAndLogicExpr
@@ -189,8 +189,8 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.logicType = boolLogicType();
   top.errors := e1.errors ++ e2.errors;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
-  top.flowResult =
-    [andFlowExpr(foldr1(orFlowExpr, e1.flowResult), foldr1(orFlowExpr, e2.flowResult))];
+  top.flowExprs =
+    [andFlowExpr(foldr1(orFlowExpr, e1.flowExprs), foldr1(orFlowExpr, e2.flowExprs))];
 }
 
 abstract production logicalOrLogicExpr
@@ -205,17 +205,17 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.logicType = boolLogicType();
   top.errors := e1.errors ++ e2.errors;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
-  top.flowResult =
-    [orFlowExpr(foldr1(orFlowExpr, e1.flowResult), foldr1(orFlowExpr, e2.flowResult))];
+  top.flowExprs =
+    [orFlowExpr(foldr1(orFlowExpr, e1.flowExprs), foldr1(orFlowExpr, e2.flowExprs))];
 }
 
 inherited attribute expectedParameterNames::[String];
 inherited attribute expectedLogicTypes::[LogicType];
 autocopy attribute callLocation::Location;
 
-synthesized attribute argumentFlowResults::[[FlowExpr]];
+synthesized attribute argumentFlowExprs::[FlowExpr];
 
-nonterminal LogicExprs with logicValueEnv, logicFunctionEnv, argumentPosition, expectedParameterNames, expectedLogicTypes, callLocation, pps, host<Exprs>, count, logicTypes, errors, argumentErrors, flowDefs, flowResults, argumentFlowResults;
+nonterminal LogicExprs with logicValueEnv, logicFunctionEnv, argumentPosition, expectedParameterNames, expectedLogicTypes, callLocation, pps, host<Exprs>, count, logicTypes, errors, argumentErrors, flowDefs, flowExprs, argumentFlowExprs;
 
 abstract production consLogicExpr
 top::LogicExprs ::= h::LogicExpr t::LogicExprs
@@ -234,12 +234,11 @@ top::LogicExprs ::= h::LogicExpr t::LogicExprs
     | [] -> [err(top.callLocation, s"Call expected ${toString(top.argumentPosition - 1)} arguments, got ${toString(top.argumentPosition + t.count)}")]
     end;
   top.flowDefs = h.flowDefs ++ t.flowDefs;
-  top.flowResults = h.flowResult :: t.flowResults;
-  top.argumentFlowResults =
+  top.flowExprs = h.flowExprs ++ t.flowExprs;
+  top.argumentFlowExprs =
     -- Pad the argument bits to be the full width
-    (repeat(constantFlowExpr(false), head(top.expectedLogicTypes).width - h.logicType.width) ++
-     h.flowResult) ::
-    t.argumentFlowResults;
+    repeat(constantFlowExpr(false), head(top.expectedLogicTypes).width - h.logicType.width) ++
+    h.flowExprs ++ t.argumentFlowExprs;
   
   t.argumentPosition = 1 + top.argumentPosition;
   t.expectedParameterNames = tail(top.expectedParameterNames);
@@ -259,6 +258,6 @@ top::LogicExprs ::=
     then [err(top.callLocation, s"Call expected ${toString(top.argumentPosition + length(top.expectedLogicTypes) - 1)} arguments, got only ${toString(top.argumentPosition - 1)}")]
     else []; 
   top.flowDefs = [];
-  top.flowResults = [];
-  top.argumentFlowResults = [];
+  top.flowExprs = [];
+  top.argumentFlowExprs = [];
 }
