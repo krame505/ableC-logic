@@ -181,15 +181,92 @@ top::LogicExpr ::= e::LogicExpr
   top.flowExprs = [notFlowExpr(foldr1(orFlowExpr, e.flowExprs))];
 }
 
+abstract production bitAndLogicExpr
+top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
+{
+  top.pp = pp"(${e1.pp} & ${e2.pp})";
+  top.host = andBitExpr(e1.host, e2.host, location=top.location);
+  top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
+  top.errors := e1.errors ++ e2.errors;
+  top.flowDefs = e1.flowDefs ++ e2.flowDefs;
+  top.flowExprs =
+    zipWith(andFlowExpr, top.logicType.bitPad(e1.flowExprs), top.logicType.bitPad(e2.flowExprs));
+  
+  top.errors <-
+    if !e1.logicType.isIntegerType
+    then [err(top.location, s"Operands to & must have an integer type, but got ${show(80, e1.logicType.pp)}")]
+    else [];
+  top.errors <-
+    if !e2.logicType.isIntegerType
+    then [err(top.location, s"Operands to & must have an integer type, but got ${show(80, e2.logicType.pp)}")]
+    else [];
+}
+
+abstract production bitXorLogicExpr
+top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
+{
+  top.pp = pp"(${e1.pp} ^ ${e2.pp})";
+  top.host = xorExpr(e1.host, e2.host, location=top.location);
+  top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
+  top.errors := e1.errors ++ e2.errors;
+  
+  local xorId::Integer = genInt();
+  local lhsTmpNames::[String] =
+    map(
+      \ i::Integer -> s"_bitXorLhsTmp${toString(i)}_${toString(xorId)}",
+      range(0, top.logicType.width));
+  local rhsTmpNames::[String] =
+    map(
+      \ i::Integer -> s"_bitXorRhsTmp${toString(i)}_${toString(xorId)}",
+      range(0, top.logicType.width));
+  top.flowDefs =
+    e1.flowDefs ++ e2.flowDefs ++
+    zipWith(flowDef, lhsTmpNames, top.logicType.bitPad(e1.flowExprs)) ++
+    zipWith(flowDef, rhsTmpNames, top.logicType.bitPad(e2.flowExprs));
+  local lhsFlowExprs::[FlowExpr] = map(nodeFlowExpr, lhsTmpNames);
+  local rhsFlowExprs::[FlowExpr] = map(nodeFlowExpr, rhsTmpNames);
+  top.flowExprs =
+    zipWith(
+      orFlowExpr,
+      zipWith(andFlowExpr, lhsFlowExprs, map(notFlowExpr, rhsFlowExprs)),
+      zipWith(andFlowExpr, map(notFlowExpr, lhsFlowExprs), rhsFlowExprs));
+  
+  top.errors <-
+    if !e1.logicType.isIntegerType
+    then [err(top.location, s"Operands to ^ must have an integer type, but got ${show(80, e1.logicType.pp)}")]
+    else [];
+  top.errors <-
+    if !e2.logicType.isIntegerType
+    then [err(top.location, s"Operands to ^ must have an integer type, but got ${show(80, e2.logicType.pp)}")]
+    else [];
+}
+
+abstract production bitOrLogicExpr
+top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
+{
+  top.pp = pp"(${e1.pp} | ${e2.pp})";
+  top.host = orBitExpr(e1.host, e2.host, location=top.location);
+  top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
+  top.errors := e1.errors ++ e2.errors;
+  top.flowDefs = e1.flowDefs ++ e2.flowDefs;
+  top.flowExprs =
+    zipWith(orFlowExpr, top.logicType.bitPad(e1.flowExprs), top.logicType.bitPad(e2.flowExprs));
+  
+  top.errors <-
+    if !e1.logicType.isIntegerType
+    then [err(top.location, s"Operands to | must have an integer type, but got ${show(80, e1.logicType.pp)}")]
+    else [];
+  top.errors <-
+    if !e2.logicType.isIntegerType
+    then [err(top.location, s"Operands to | must have an integer type, but got ${show(80, e2.logicType.pp)}")]
+    else [];
+}
+
 abstract production logicalAndLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 {
-  top.pp = pp"(${e1.pp} && ${e2.pp})"; 
-  top.host =
-    andExpr(
-      e1.logicType.hostToUnsignedProd(e1.host, builtin),
-      e2.logicType.hostToUnsignedProd(e2.host, builtin),
-      location=top.location);
+  top.pp = pp"(${e1.pp} && ${e2.pp})";
+  top.host = andExpr(e1.host, e2.host, location=top.location);
   top.logicType = boolLogicType();
   top.errors := e1.errors ++ e2.errors;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
@@ -200,12 +277,8 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 abstract production logicalOrLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 {
-  top.pp = pp"(${e1.pp} || ${e2.pp})"; 
-  top.host =
-    orExpr(
-      e1.logicType.hostToUnsignedProd(e1.host, builtin),
-      e2.logicType.hostToUnsignedProd(e2.host, builtin),
-      location=top.location);
+  top.pp = pp"(${e1.pp} || ${e2.pp})";
+  top.host = orExpr(e1.host, e2.host, location=top.location);
   top.logicType = boolLogicType();
   top.errors := e1.errors ++ e2.errors;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;

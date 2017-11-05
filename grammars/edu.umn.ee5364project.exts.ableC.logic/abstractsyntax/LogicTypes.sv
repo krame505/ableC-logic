@@ -66,11 +66,12 @@ synthesized attribute hostToUnsignedProd::(Expr ::= Expr Location);
 synthesized attribute hostFromUnsignedProd::(Expr ::= Expr Location);
 synthesized attribute bitPad::([FlowExpr] ::= [FlowExpr]);
 
-nonterminal LogicType with pp, logicTypeExpr, width, hostToUnsignedProd, hostFromUnsignedProd, bitPad;
+nonterminal LogicType with pp, logicTypeExpr, width, isIntegerType, hostToUnsignedProd, hostFromUnsignedProd, bitPad;
 
 aspect default production
 top::LogicType ::=
 {
+  top.isIntegerType = true;
   top.hostToUnsignedProd = \ e::Expr l::Location -> e;
   top.hostFromUnsignedProd = \ e::Expr l::Location -> e;
   top.bitPad =

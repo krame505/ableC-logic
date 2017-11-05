@@ -4,6 +4,12 @@ terminal MaxPrecLBracket_t /\[/ precedence=15, lexer classes {Csymbol};
 
 terminal LogicalNotOp_t '!' precedence=14, lexer classes {Csymbol};
 
+terminal BitAndOp_t '&' association=left, precedence=8, lexer classes {Csymbol};
+
+terminal BitXorOp_t '^' association=left, precedence=7, lexer classes {Csymbol};
+
+terminal BitOrOp_t '|' association=left, precedence=6, lexer classes {Csymbol};
+
 terminal LogicalAndOp_t '&&' association=left, precedence=5, lexer classes {Csymbol};
 
 terminal LogicalOrOp_t '||' association=left, precedence=4, lexer classes {Csymbol};
@@ -56,6 +62,15 @@ concrete productions top::LogicExpr_c
 
 | LogicalNotOp_t e::LogicExpr_c
   { top.ast = logicalNotLogicExpr(e.ast, location=top.location); }
+  
+| e1::LogicExpr_c BitAndOp_t e2::LogicExpr_c
+  { top.ast = bitAndLogicExpr(e1.ast, e2.ast, location=top.location); }
+  
+| e1::LogicExpr_c BitXorOp_t e2::LogicExpr_c
+  { top.ast = bitXorLogicExpr(e1.ast, e2.ast, location=top.location); }
+  
+| e1::LogicExpr_c BitOrOp_t e2::LogicExpr_c
+  { top.ast = bitOrLogicExpr(e1.ast, e2.ast, location=top.location); }
   
 | e1::LogicExpr_c LogicalAndOp_t e2::LogicExpr_c
   { top.ast = logicalAndLogicExpr(e1.ast, e2.ast, location=top.location); }
