@@ -28,7 +28,7 @@ top::LogicTypeExpr ::= width::Integer
     else if width <= 64
     then typedefTypeExpr(nilQualifier(), name("int64_t", location=builtin))
     else errorTypeExpr([err(top.location, s"Integer width not yet implemented: ${toString(width)}")]);
-  top.logicType = intLogicType(true, width);
+  top.logicType = signedLogicType(width);
   top.errors := if width < 1 then [err(top.location, "Width must be >= 1")] else [];
 }
 
@@ -46,7 +46,7 @@ top::LogicTypeExpr ::= width::Integer
     else if width <= 64
     then typedefTypeExpr(nilQualifier(), name("uint64_t", location=builtin))
     else errorTypeExpr([err(top.location, s"Integer width not yet implemented: ${toString(width)}")]);
-  top.logicType = intLogicType(false, width);
+  top.logicType = unsignedLogicType(width);
   top.errors := if width < 1 then [err(top.location, "Width must be >= 1")] else [];
 }
 
@@ -62,7 +62,20 @@ top::LogicTypeExpr ::= msg::[Message]
 synthesized attribute logicTypeExpr::LogicTypeExpr;
 synthesized attribute width::Integer;
 
-nonterminal LogicType with pp, logicTypeExpr, width;
+synthesized attribute hostToUnsignedProd::(Expr ::= Expr Location);
+synthesized attribute hostFromUnsignedProd::(Expr ::= Expr Location);
+synthesized attribute bitPad::([FlowExpr] ::= [FlowExpr]);
+
+nonterminal LogicType with pp, logicTypeExpr, width, hostToUnsignedProd, hostFromUnsignedProd, bitPad;
+
+aspect default production
+top::LogicType ::=
+{
+  top.hostToUnsignedProd = \ e::Expr l::Location -> e;
+  top.hostFromUnsignedProd = \ e::Expr l::Location -> e;
+  top.bitPad =
+    \ fes::[FlowExpr] -> repeat(constantFlowExpr(false), top.width - length(fes)) ++ fes;
+}
 
 abstract production boolLogicType
 top::LogicType ::= 
@@ -72,14 +85,21 @@ top::LogicType ::=
   top.width = 1;
 }
 
-abstract production intLogicType
-top::LogicType ::= signed::Boolean width::Integer
+abstract production signedLogicType
+top::LogicType ::= width::Integer
 {
-  top.pp = pp"${text(if signed then "signed" else "unsigned")}:${text(toString(width))}";
-  top.logicTypeExpr =
-    if signed
-    then signedLogicTypeExpr(width, location=builtin)
-    else unsignedLogicTypeExpr(width, location=builtin);
+  top.pp = pp"signed:${text(toString(width))}";
+  top.logicTypeExpr = signedLogicTypeExpr(width, location=builtin);
+  top.width = width;
+  -- TODO: This duplicates whatever logic computes the first bit
+  top.bitPad = \ fes::[FlowExpr] -> repeat(head(fes), top.width - length(fes)) ++ fes;  
+}
+
+abstract production unsignedLogicType
+top::LogicType ::= width::Integer
+{
+  top.pp = pp"unsigned:${text(toString(width))}";
+  top.logicTypeExpr = unsignedLogicTypeExpr(width, location=builtin);
   top.width = width;
 }
 

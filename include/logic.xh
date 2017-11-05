@@ -14,18 +14,10 @@ typedef _Bool bool;
 const bool true = 1;
 const bool false = 0;
 
-// General casting that doesn't convert floats
-typedef union {
-  int8_t i8;
-  int16_t i16;
-  int32_t i32;
-  int64_t i64;
-  uint8_t ui8;
-  uint16_t ui16;
-  uint32_t ui32;
-  uint64_t ui64;
-  float f;
-  double d;
-} _logic_type_t;
+// Define macros in case these are checked for existance prior to being defined
+#define bool bool
+#define true true
+#define false false
+#define __bool_true_false_are_defined 1
 
 #endif

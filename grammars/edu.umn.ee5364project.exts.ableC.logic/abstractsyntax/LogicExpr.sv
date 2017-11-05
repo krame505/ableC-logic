@@ -24,7 +24,7 @@ top::LogicExpr ::= value::Boolean
 abstract production intConstantLogicExpr
 top::LogicExpr ::= signed::Boolean bits::Bits
 {
-  top.pp = pp"0b${ppConcat(map(\bit::Boolean -> if bit then pp"1" else pp"0", bits))}"; -- TODO: Hex if width is multiple of 4
+  top.pp = pp"0b${ppConcat(map(\bit::Boolean -> if bit then pp"1" else pp"0", bits))}"; -- TODO: Show hex if width is multiple of 4
   top.host =
     realConstant(
       integerConstant(
@@ -33,7 +33,7 @@ top::LogicExpr ::= signed::Boolean bits::Bits
         noIntSuffix(), -- TODO: Does this need a suffix?
         location=builtin),
       location=top.location);
-  top.logicType = intLogicType(signed, length(bits));
+  top.logicType = if signed then signedLogicType(length(bits)) else signedLogicType(length(bits));
   top.errors := [];
   top.flowDefs = [];
   top.flowExprs = map(constantFlowExpr, bits);
@@ -93,18 +93,16 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host =
     orBitExpr(
       lshExpr(
+        -- Convert to unsigned, then cast to correct width before shifting
         explicitCastExpr(
           typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
-          e1.host,
+          e1.logicType.hostToUnsignedProd(e1.host, builtin),
           location=builtin),
         mkIntConst(e2.logicType.width, builtin),
         location=top.location),
-      explicitCastExpr(
-        typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
-        e2.host,
-        location=builtin),
+      e2.logicType.hostToUnsignedProd(e2.host, builtin),
       location=top.location);
-  top.logicType = intLogicType(false, e1.logicType.width + e2.logicType.width);
+  top.logicType = unsignedLogicType(e1.logicType.width + e2.logicType.width);
   top.errors := e1.errors ++ e2.errors;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
   top.flowExprs = e1.flowExprs ++ e2.flowExprs;
@@ -115,12 +113,11 @@ top::LogicExpr ::= e::LogicExpr i::Integer
 {
   top.pp = pp"${e.pp}[${text(toString(i))})}]";
   top.host =
-    explicitCastExpr(
-      typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
-      andBitExpr(
-        mkIntConst(1, builtin),
-        rshExpr(e.host, mkIntConst(e.logicType.width - (i + 1), builtin), location=builtin),
-        location=builtin),
+    andBitExpr(
+      mkIntConst(1, builtin),
+      rshExpr(
+        e.logicType.hostToUnsignedProd(e.host, builtin),
+        mkIntConst(e.logicType.width - (i + 1), builtin), location=builtin),
       location=builtin);
   top.logicType = boolLogicType();
   top.errors := e.errors;
@@ -138,14 +135,13 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
 {
   top.pp = pp"${e.pp}[${text(toString(i))}..${text(toString(j))}]";
   top.host =
-    explicitCastExpr(
-      typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
-      andBitExpr(
-        mkIntConst(bitsToInt(false, repeat(true, j - i + 1)), builtin),
-        rshExpr(e.host, mkIntConst(e.logicType.width - (j + 1), builtin), location=builtin),
-        location=builtin),
+    andBitExpr(
+      mkIntConst(bitsToInt(false, repeat(true, j - i + 1)), builtin),
+      rshExpr(
+        e.logicType.hostToUnsignedProd(e.host, builtin),
+        mkIntConst(e.logicType.width - (j + 1), builtin), location=builtin),
       location=builtin);
-  top.logicType = intLogicType(false, j - i + 1);
+  top.logicType = unsignedLogicType(j - i + 1);
   top.errors := e.errors;
   top.flowDefs = e.flowDefs;
   top.flowExprs = take(j - i + 1, drop(i, e.flowExprs));
@@ -163,6 +159,14 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
     then [err(top.location, s"Lower bit index ${toString(i)} must be less than upper bit index ${toString(j)}")]
     else [];
 }
+
+-- Conversions
+{-abstract production boolToUnsigned
+top::LogicExpr ::= e::LogicExpr
+{
+  top.pp = pp"boolToUnsigned(${e.pp})";
+  top.
+}-}
 
 -- Built-in C operators
 -- TODO: Binary flat-fold flow translation for logic ops
@@ -182,9 +186,9 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 {
   top.pp = pp"(${e1.pp} && ${e2.pp})"; 
   top.host =
-    explicitCastExpr(
-      typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
-      andExpr(e1.host, e2.host, location=top.location),
+    andExpr(
+      e1.logicType.hostToUnsignedProd(e1.host, builtin),
+      e2.logicType.hostToUnsignedProd(e2.host, builtin),
       location=top.location);
   top.logicType = boolLogicType();
   top.errors := e1.errors ++ e2.errors;
@@ -198,9 +202,9 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 {
   top.pp = pp"(${e1.pp} || ${e2.pp})"; 
   top.host =
-    explicitCastExpr(
-      typeName(top.logicType.logicTypeExpr.host, baseTypeExpr()),
-      orExpr(e1.host, e2.host, location=top.location),
+    orExpr(
+      e1.logicType.hostToUnsignedProd(e1.host, builtin),
+      e2.logicType.hostToUnsignedProd(e2.host, builtin),
       location=top.location);
   top.logicType = boolLogicType();
   top.errors := e1.errors ++ e2.errors;
@@ -221,7 +225,13 @@ abstract production consLogicExpr
 top::LogicExprs ::= h::LogicExpr t::LogicExprs
 {
   top.pps = h.pp :: t.pps;
-  top.host = consExpr(h.host, t.host); -- TODO: Cast h.host to h.logicType.host
+  top.host =
+    consExpr(
+      -- TODO: 2 conversions might be inefficient if the types are the same?
+      head(top.expectedLogicTypes).hostFromUnsignedProd(
+        h.logicType.hostToUnsignedProd(h.host, builtin),
+        builtin),
+      t.host);
   top.count = 1 + t.count;
   top.logicTypes = h.logicType :: t.logicTypes;
   top.errors := h.errors ++ t.errors;
@@ -235,10 +245,8 @@ top::LogicExprs ::= h::LogicExpr t::LogicExprs
     end;
   top.flowDefs = h.flowDefs ++ t.flowDefs;
   top.flowExprs = h.flowExprs ++ t.flowExprs;
-  top.argumentFlowExprs =
-    -- Pad the argument bits to be the full width
-    repeat(constantFlowExpr(false), head(top.expectedLogicTypes).width - h.logicType.width) ++
-    h.flowExprs ++ t.argumentFlowExprs;
+  -- Pad the argument bits to be the full width of what is expected
+  top.argumentFlowExprs = head(top.expectedLogicTypes).bitPad(h.flowExprs) ++ t.argumentFlowExprs;
   
   t.argumentPosition = 1 + top.argumentPosition;
   t.expectedParameterNames = tail(top.expectedParameterNames);

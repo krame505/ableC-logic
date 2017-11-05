@@ -44,12 +44,6 @@ Integer ::= signed::Boolean bs::Bits
     else help(0, bs);
 }
 
-function padBits
-Bits ::= width::Integer bs::Bits
-{
-  return repeat(false, width - length(bs)) ++ bs;
-}
-
 function notBits
 Bits ::= bs::Bits
 {
@@ -91,6 +85,12 @@ function range
 }
 
 {-
+function padBits
+Bits ::= width::Integer bs::Bits
+{
+  return repeat(false, width - length(bs)) ++ bs;
+}
+
 function addBits
 Bits ::= bs1::Bits bs2::Bits
 {
