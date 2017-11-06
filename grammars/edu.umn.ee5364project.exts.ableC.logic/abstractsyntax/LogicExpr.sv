@@ -170,6 +170,22 @@ top::LogicExpr ::= e::LogicExpr
 
 -- Built-in C operators
 -- TODO: Binary flat-fold flow translation for logic ops
+abstract production bitNotLogicExpr
+top::LogicExpr ::= e::LogicExpr
+{
+  top.pp = parens( cat( text("~"), e.pp ) );
+  top.host = bitNegateExpr(e.host, location=top.location);
+  top.logicType = e.logicType;
+  top.errors := e.errors;
+  top.flowDefs = e.flowDefs;
+  top.flowExprs = map(notFlowExpr, e.flowExprs);
+  
+  top.errors <-
+    if !e.logicType.isIntegerType
+    then [err(top.location, s"Operands to ~ must have an integer type, but got ${show(80, e.logicType.pp)}")]
+    else [];
+}
+
 abstract production logicalNotLogicExpr
 top::LogicExpr ::= e::LogicExpr
 {

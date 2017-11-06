@@ -68,6 +68,10 @@ logic unsigned:16 opTest(unsigned:8 x, unsigned:16 y) {
   return x ^ y;
 }
 
+logic unsigned:16 opTest2(unsigned:16 x) {
+  return ~x;
+}
+
 int main (int argc, char **argv) {
 
   printf("0x%x\n", foo(12, true));
@@ -103,6 +107,7 @@ int main (int argc, char **argv) {
   printf("%d\n", bar1(-5));
 
   printf("0x%hx\n", opTest(0xFA, 0xAF23));
+  printf("0x%hx\n", opTest2(0xF0F0));
   
   return 0; 
 }

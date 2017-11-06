@@ -2,6 +2,7 @@ grammar edu:umn:ee5364project:exts:ableC:logic:concretesyntax;
 
 terminal MaxPrecLBracket_t /\[/ precedence=15, lexer classes {Csymbol};
 
+terminal BitNotOp_t     '~' precedence=14, lexer classes {Csymbol};
 terminal LogicalNotOp_t '!' precedence=14, lexer classes {Csymbol};
 
 terminal BitAndOp_t '&' association=left, precedence=8, lexer classes {Csymbol};
@@ -62,6 +63,8 @@ concrete productions top::LogicExpr_c
 
 | LogicalNotOp_t e::LogicExpr_c
   { top.ast = logicalNotLogicExpr(e.ast, location=top.location); }
+| BitNotOp_t e::LogicExpr_c
+  { top.ast = bitNotLogicExpr(e.ast, location=top.location); }
   
 | e1::LogicExpr_c BitAndOp_t e2::LogicExpr_c
   { top.ast = bitAndLogicExpr(e1.ast, e2.ast, location=top.location); }
