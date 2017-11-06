@@ -74,6 +74,10 @@ logic unsigned:16 opTest2(unsigned:16 x) {
   return ~x;
 }
 
+logic signed:16 opTest3(signed:8 x, signed:16 y) {
+  return x ^ y;
+}
+
 int main (int argc, char **argv) {
 
   printf("0x%x\n", foo(12, true));

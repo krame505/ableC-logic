@@ -64,7 +64,7 @@ synthesized attribute width::Integer;
 
 synthesized attribute hostToUnsignedProd::(Expr ::= Expr Location);
 synthesized attribute hostFromUnsignedProd::(Expr ::= Expr Location);
-synthesized attribute bitPad::([FlowExpr] ::= [FlowExpr]);
+synthesized attribute bitPad::(Pair<[FlowDef] [FlowExpr]> ::= [FlowExpr]);
 
 nonterminal LogicType with pp, logicTypeExpr, width, isIntegerType, hostToUnsignedProd, hostFromUnsignedProd, bitPad;
 
@@ -75,7 +75,7 @@ top::LogicType ::=
   top.hostToUnsignedProd = \ e::Expr l::Location -> e;
   top.hostFromUnsignedProd = \ e::Expr l::Location -> e;
   top.bitPad =
-    \ fes::[FlowExpr] -> repeat(constantFlowExpr(false), top.width - length(fes)) ++ fes;
+    \ fes::[FlowExpr] -> pair([], repeat(constantFlowExpr(false), top.width - length(fes)) ++ fes);
 }
 
 abstract production boolLogicType
@@ -92,8 +92,14 @@ top::LogicType ::= width::Integer
   top.pp = pp"signed:${text(toString(width))}";
   top.logicTypeExpr = signedLogicTypeExpr(width, location=builtin);
   top.width = width;
-  -- TODO: This duplicates whatever logic computes the first bit
-  top.bitPad = \ fes::[FlowExpr] -> repeat(head(fes), top.width - length(fes)) ++ fes;  
+  top.bitPad =
+    \ fes::[FlowExpr] ->
+      let tmpFlowId::String = s"_signedBitPadTmp_${toString(genInt())}"
+      in
+        pair(
+          [flowDef(tmpFlowId, head(fes))],
+          repeat(nodeFlowExpr(tmpFlowId), top.width - length(fes) + 1) ++ tail(fes))
+      end;  
 }
 
 abstract production unsignedLogicType
