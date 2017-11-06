@@ -26,7 +26,7 @@ top::Decl ::= f::LogicFunctionDecl
   forwards to
     decls(
       foldDecl([
-        txtDecl(s"/*\n${show(80, f.flowGraph.pp)}\n*/"),
+        txtDecl(s"/*\n${show(80, f.flowGraph.collapsed.pp)}\n*/"),
         if !null(localErrors) then decls(foldDecl([warnDecl(localErrors), errorFwrd])) else fwrd,
         defsDecl(
           valueDef(f.name, logicFunctionValueItem(top.env, f)) ::

@@ -16,8 +16,10 @@ logic signed:17 foo(unsigned:7 a, bool b) {
   return 3u, c, t, f, t, f;
 }
 
-logic bool bar() {
-  return false;
+logic bool bar(unsigned:8 x) {
+  unsigned:4 y = x[0..3] | x[4..7];
+  unsigned:2 z = y[0..1] | y[2..3];
+  return z[0] | z[1];
 }
 
 logic unsigned:16 lsh(unsigned:16 x) {
@@ -53,7 +55,7 @@ logic signed:16 arsh(signed:16 x) {
 }
 
 logic unsigned:2 halfAdd(bool x, bool y) {
-  return x && !y || !x && y, x && y;
+  return x && y, x ^ y;
 }
 
 logic signed:16 foo1(signed:16 x) {
@@ -65,7 +67,7 @@ logic signed:16 bar1(signed:8 x) {
 }
 
 logic unsigned:16 opTest(unsigned:8 x, unsigned:16 y) {
-  return x ^ y;
+  return x & y;
 }
 
 logic unsigned:16 opTest2(unsigned:16 x) {
