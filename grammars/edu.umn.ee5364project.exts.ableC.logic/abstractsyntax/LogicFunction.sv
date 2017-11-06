@@ -59,7 +59,7 @@ synthesized attribute flowGraph::FlowGraph;
 synthesized attribute parameterLogicTypes::[LogicType];
 synthesized attribute returnLogicType::LogicType;
 
-nonterminal LogicFunctionDecl with logicFunctionEnv, pp, host<FunctionDecl>, logicFunctionDefs, errors, flowGraph, name, parameterLogicTypes, returnLogicType, sourceLocation;
+nonterminal LogicFunctionDecl with logicFunctionEnv, isTopLevel, pp, host<FunctionDecl>, logicFunctionDefs, errors, flowGraph, name, parameterLogicTypes, returnLogicType, sourceLocation;
 
 abstract production logicFunctionDecl
 top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters body::LogicStmts
@@ -70,7 +70,8 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       braces(cat(line(), nestlines(2, terminate(line(), body.pps))))]);
   top.host =
     functionDecl(
-      [], nilSpecialSpecifier(),
+      if top.isTopLevel then [staticStorageClass()] else [],
+      consSpecialSpecifier(inlineQualifier(), nilSpecialSpecifier()),
       ret.host,
       functionTypeExprWithArgs(baseTypeExpr(), params.host, false, nilQualifier()),
       getLogicFunctionHostName(id),

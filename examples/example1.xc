@@ -118,6 +118,12 @@ int main (int argc, char **argv) {
 
   printf("0x%hx\n", opTest(0xFA, 0xAF23));
   printf("0x%hx\n", opTest2(0xF0F0));
+
+  logic bool nested(signed:2 foo) {
+    return foo[0] | foo[1];
+  }
+  printf("%d\n", nested(2));
+  
   
   return 0; 
 }
