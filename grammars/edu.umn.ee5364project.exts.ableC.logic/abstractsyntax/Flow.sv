@@ -24,9 +24,10 @@ autocopy attribute parameters::[FlowExpr];
 
 -- Collapse together nodes with only one reference, remove unused nodes
 synthesized attribute collapsed<a>::a;
-synthesized attribute referencedNodes::[String];
-synthesized attribute hasMultipleReferences::Boolean;
-autocopy attribute referenceEnv::tm:Map<String Unit>;
+synthesized attribute referencedNodes::[String]; -- The list of nodes referenced in a logic expr or def
+synthesized attribute canCollapse::Boolean; -- True if a def can be removed
+synthesized attribute isSimple::Boolean; -- True if an expression may be duplicated without introducing extra logic
+autocopy attribute referenceEnv::tm:Map<String Unit>; -- Map that contains an entry for every time an id is referenced
 
 nonterminal FlowGraph with renameFn, parameters, pp, flowDefs, flowExprs, renamed<FlowGraph>, paramSubstituted<FlowGraph>, collapsed<FlowGraph>;
 flowtype FlowGraph = decorate {};
@@ -59,8 +60,7 @@ top::FlowDefs ::= h::FlowDef t::FlowDefs
   top.pps = h.pp :: t.pps;
   top.flowDefs = h :: t.flowDefs;
   top.flowContribs = h.flowContribs ++ t.flowContribs;
-  top.collapsed =
-    if h.hasMultipleReferences then consFlowDef(h.collapsed, t.collapsed) else t.collapsed;
+  top.collapsed = if h.canCollapse then t.collapsed else consFlowDef(h.collapsed, t.collapsed);
   top.referencedNodes = h.referencedNodes ++ t.referencedNodes;
   
   t.flowEnv = tm:add(h.flowContribs, top.flowEnv);
@@ -76,7 +76,7 @@ top::FlowDefs ::=
   top.referencedNodes = [];
 }
 
-nonterminal FlowDef with flowEnv, renameFn, parameters, referenceEnv, pp, flowContribs, renamed<FlowDef>, paramSubstituted<FlowDef>, collapsed<FlowDef>, referencedNodes, hasMultipleReferences;
+nonterminal FlowDef with flowEnv, renameFn, parameters, referenceEnv, pp, flowContribs, renamed<FlowDef>, paramSubstituted<FlowDef>, collapsed<FlowDef>, referencedNodes, canCollapse;
 flowtype FlowDef = decorate {flowEnv, referenceEnv};
 
 abstract production flowDef
@@ -87,7 +87,7 @@ top::FlowDef ::= id::String fe::FlowExpr
   top.flowContribs = [pair(id, fe)];
   top.renamed = flowDef(top.renameFn(id), fe.renamed);
   top.referencedNodes = fe.referencedNodes;
-  top.hasMultipleReferences = length(tm:lookup(id, top.referenceEnv)) > 1;
+  top.canCollapse = fe.isSimple || length(tm:lookup(id, top.referenceEnv)) <= 1;
 }
 
 nonterminal FlowExprs with flowEnv, renameFn, parameters, referenceEnv, pps, flowExprs, renamed<FlowExprs>, paramSubstituted<FlowExprs>, collapsed<FlowExprs>, referencedNodes;
@@ -111,8 +111,14 @@ top::FlowExprs ::=
   top.referencedNodes = [];
 }
 
-nonterminal FlowExpr with flowEnv, renameFn, parameters, referenceEnv, pp, renamed<FlowExpr>, paramSubstituted<FlowExpr>, collapsed<FlowExpr>, referencedNodes;
+nonterminal FlowExpr with flowEnv, renameFn, parameters, referenceEnv, pp, renamed<FlowExpr>, paramSubstituted<FlowExpr>, collapsed<FlowExpr>, referencedNodes, isSimple;
 flowtype FlowExpr = decorate {flowEnv, referenceEnv};
+
+aspect default production
+top::FlowExpr ::=
+{
+  top.isSimple = false;
+}
 
 abstract production constantFlowExpr
 top::FlowExpr ::= b::Boolean
@@ -120,8 +126,10 @@ top::FlowExpr ::= b::Boolean
   propagate renamed, paramSubstituted, collapsed;
   top.pp = if b then pp"true" else pp"false";
   top.referencedNodes = [];
+  top.isSimple = true;
 }
 
+-- Invariant: A given parameter is only referenced in a flow graph once
 abstract production parameterFlowExpr
 top::FlowExpr ::= i::Integer
 {
@@ -129,6 +137,7 @@ top::FlowExpr ::= i::Integer
   top.pp = brackets(text(toString(i)));
   top.paramSubstituted = head(drop(i, top.parameters));
   top.referencedNodes = [];
+  top.isSimple = false; -- NOT simple, since we don't know if what will be substituted in is simple
 }
 
 abstract production nodeFlowExpr
@@ -137,11 +146,12 @@ top::FlowExpr ::= id::String
   propagate paramSubstituted;
   top.pp = text(id);
   top.renamed = nodeFlowExpr(top.renameFn(id));
-  top.collapsed =
-    if length(tm:lookup(id, top.referenceEnv)) <= 1 then refNode.collapsed else nodeFlowExpr(id);
-  top.referencedNodes = [id];
   
   production refNode::Decorated FlowExpr = head(tm:lookup(id, top.flowEnv));
+  local canCollapse::Boolean = refNode.isSimple || length(tm:lookup(id, top.referenceEnv)) <= 1;
+  top.collapsed = if canCollapse then refNode.collapsed else nodeFlowExpr(id);
+  top.referencedNodes = [id];
+  top.isSimple = if canCollapse then refNode.isSimple else true;
 }
 
 abstract production andFlowExpr
