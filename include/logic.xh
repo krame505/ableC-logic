@@ -20,4 +20,15 @@ const bool false = 0;
 #define false false
 #define __bool_true_false_are_defined 1
 
+// Generally useful logic functions
+logic unsigned:2 halfAdd(bool a, bool b) {
+  return a && b, a ^ b;
+}
+
+logic unsigned:2 fullAdd(bool a, bool b, bool c) {
+  unsigned:2 upperRes = halfAdd(a, b);
+  unsigned:2 lowerRes = halfAdd(c, upperRes[1]);
+  return upperRes[0] || lowerRes[0], lowerRes[1];
+}
+
 #endif

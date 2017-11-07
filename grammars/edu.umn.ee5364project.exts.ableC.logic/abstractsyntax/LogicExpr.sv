@@ -67,15 +67,12 @@ top::LogicExpr ::= f::Name a::LogicExprs
   top.host = directCallExpr(getLogicFunctionHostName(f), a.host, location=top.location);
   top.logicType = f.logicFunctionItem.returnLogicType;
   top.errors := a.errors;
+  top.flowDefs = a.argumentFlowDefs ++ functionFlowGraph.appliedFlowDefs;
+  top.flowExprs = functionFlowGraph.appliedFlowExprs;
   
-  local callId::Integer = genInt();
-  local renameFn::(String ::= String) = \ n::String -> s"${f.name}_${n}_${toString(callId)}";
-  local transformedFlowGraph::FlowGraph =
-    subParamsFlowGraph(
-      a.argumentFlowExprs,
-      renameFlowGraph(renameFn, f.logicFunctionItem.flowGraph));
-  top.flowDefs = a.argumentFlowDefs ++ transformedFlowGraph.flowDefs;
-  top.flowExprs = transformedFlowGraph.flowExprs;
+  local functionFlowGraph::FlowGraph = f.logicFunctionItem.flowGraph;
+  functionFlowGraph.callId = toString(genInt());
+  functionFlowGraph.arguments = a.argumentFlowExprs;
   
   a.argumentPosition = 1;
   a.expectedLogicTypes = f.logicFunctionItem.parameterLogicTypes;
@@ -160,14 +157,6 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
     else [];
 }
 
--- Conversions
-{-abstract production boolToUnsigned
-top::LogicExpr ::= e::LogicExpr
-{
-  top.pp = pp"boolToUnsigned(${e.pp})";
-  top.
-}-}
-
 -- Built-in C operators
 -- TODO: Binary flat-fold flow translation for logic ops
 abstract production bitNotLogicExpr
@@ -182,7 +171,7 @@ top::LogicExpr ::= e::LogicExpr
   
   top.errors <-
     if !e.logicType.isIntegerType
-    then [err(top.location, s"Operands to ~ must have an integer type, but got ${show(80, e.logicType.pp)}")]
+    then [err(top.location, s"Operand to ~ must have an integer type, but got ${show(80, e.logicType.pp)}")]
     else [];
 }
 
@@ -196,6 +185,28 @@ top::LogicExpr ::= e::LogicExpr
   top.flowDefs = e.flowDefs;
   top.flowExprs = [notFlowExpr(foldr1(orFlowExpr, e.flowExprs))];
 }
+{-
+abstract production addLogicExpr
+top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
+{
+  top.pp = pp"(${e1.pp} + ${e2.pp})";
+  top.host = addExpr(e1.host, e2.host, location=top.location);
+  top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
+  top.errors := e1.errors ++ e2.errors;
+  local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
+  local rhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
+  top.flowDefs = e1.flowDefs ++ e2.flowDefs ++ lhsBitPad.fst ++ rhsBitPad.fst;
+  top.flowExprs = zipWith(andFlowExpr, lhsBitPad.snd, rhsBitPad.snd);
+  
+  top.errors <-
+    if !e1.logicType.isIntegerType
+    then [err(top.location, s"Operand to + must have an integer type, but got ${show(80, e1.logicType.pp)}")]
+    else [];
+  top.errors <-
+    if !e2.logicType.isIntegerType
+    then [err(top.location, s"Operand to + must have an integer type, but got ${show(80, e2.logicType.pp)}")]
+    else [];
+}-}
 
 abstract production bitAndLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
@@ -211,11 +222,11 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   
   top.errors <-
     if !e1.logicType.isIntegerType
-    then [err(top.location, s"Operands to & must have an integer type, but got ${show(80, e1.logicType.pp)}")]
+    then [err(top.location, s"Operand to & must have an integer type, but got ${show(80, e1.logicType.pp)}")]
     else [];
   top.errors <-
     if !e2.logicType.isIntegerType
-    then [err(top.location, s"Operands to & must have an integer type, but got ${show(80, e2.logicType.pp)}")]
+    then [err(top.location, s"Operand to & must have an integer type, but got ${show(80, e2.logicType.pp)}")]
     else [];
 }
 
@@ -252,11 +263,11 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   
   top.errors <-
     if !e1.logicType.isIntegerType
-    then [err(top.location, s"Operands to ^ must have an integer type, but got ${show(80, e1.logicType.pp)}")]
+    then [err(top.location, s"Operand to ^ must have an integer type, but got ${show(80, e1.logicType.pp)}")]
     else [];
   top.errors <-
     if !e2.logicType.isIntegerType
-    then [err(top.location, s"Operands to ^ must have an integer type, but got ${show(80, e2.logicType.pp)}")]
+    then [err(top.location, s"Operand to ^ must have an integer type, but got ${show(80, e2.logicType.pp)}")]
     else [];
 }
 
@@ -270,15 +281,15 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
   local rhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
   top.flowDefs = e1.flowDefs ++ e2.flowDefs ++ lhsBitPad.fst ++ rhsBitPad.fst;
-  top.flowExprs = zipWith(andFlowExpr, lhsBitPad.snd, rhsBitPad.snd);
+  top.flowExprs = zipWith(orFlowExpr, lhsBitPad.snd, rhsBitPad.snd);
   
   top.errors <-
     if !e1.logicType.isIntegerType
-    then [err(top.location, s"Operands to | must have an integer type, but got ${show(80, e1.logicType.pp)}")]
+    then [err(top.location, s"Operand to | must have an integer type, but got ${show(80, e1.logicType.pp)}")]
     else [];
   top.errors <-
     if !e2.logicType.isIntegerType
-    then [err(top.location, s"Operands to | must have an integer type, but got ${show(80, e2.logicType.pp)}")]
+    then [err(top.location, s"Operand to | must have an integer type, but got ${show(80, e2.logicType.pp)}")]
     else [];
 }
 

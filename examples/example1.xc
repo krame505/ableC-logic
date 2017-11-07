@@ -54,10 +54,6 @@ logic signed:16 arsh(signed:16 x) {
   return x[0], x[0..14];
 }
 
-logic unsigned:2 halfAdd(bool x, bool y) {
-  return x && y, x ^ y;
-}
-
 logic signed:16 foo1(signed:16 x) {
   return x[0..14], !x[15];
 }
@@ -80,6 +76,12 @@ logic signed:16 opTest3(signed:8 x, signed:16 y) {
 
 logic bool opTest4(bool x, bool y) {
   return x ^ y;
+}
+
+logic bool foo3(unsigned:3 a) {
+  bool b = a[0] | a[1];
+  bool c = b | a[2];
+  return b & c | !b ^ !c;
 }
 
 int main (int argc, char **argv) {
