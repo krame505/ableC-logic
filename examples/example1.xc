@@ -84,6 +84,10 @@ logic bool foo3(unsigned:3 a) {
   return b & c | !b ^ !c;
 }
 
+logic unsigned:3 addTest(unsigned:3 a, unsigned:3 b) {
+  return a + b;
+}
+
 int main (int argc, char **argv) {
 
   printf("0x%x\n", foo(12, true));
@@ -125,7 +129,8 @@ int main (int argc, char **argv) {
     return foo[0] | foo[1];
   }
   printf("%d\n", nested(2));
-  
+
+  printf("%d\n", addTest(2, 3));
   
   return 0; 
 }

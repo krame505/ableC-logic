@@ -47,6 +47,7 @@ top::Expr ::= id::Name args::Exprs
   args.callExpr = top;
   args.callVariadic = false;
   
+  -- TODO: Replace MSBs with padding bits to the correct width
   local hostTrans::Expr = directCallExpr(getLogicFunctionHostName(id), args, location=top.location);
   
   local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;

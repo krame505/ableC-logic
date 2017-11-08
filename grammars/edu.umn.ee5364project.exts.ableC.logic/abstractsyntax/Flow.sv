@@ -192,6 +192,7 @@ top::FlowExpr ::= e::FlowExpr
 }
 
 -- Utility functions
+-- Construct a flow graph from lists of flow defs and flow exprs
 function buildFlowGraph
 FlowGraph ::= name::String flowDefs::[FlowDef] flowExprs::[FlowExpr]
 {
@@ -201,3 +202,13 @@ FlowGraph ::= name::String flowDefs::[FlowDef] flowExprs::[FlowExpr]
       foldr(consFlowDef, nilFlowDef(), flowDefs),
       foldr(consFlowExpr, nilFlowExpr(), flowExprs));
 }
+
+-- Get the lists of flow defs and flow exprs from applying a flow graph to input arguments
+function applyFlowGraph
+Pair<[FlowDef] [FlowExpr]> ::= flowGraph::FlowGraph arguments::[FlowExpr]
+{
+  flowGraph.callId = toString(genInt());
+  flowGraph.arguments = arguments;
+  return pair(flowGraph.appliedFlowDefs, flowGraph.appliedFlowExprs);
+}
+

@@ -5,6 +5,8 @@ terminal MaxPrecLBracket_t /\[/ precedence=15, lexer classes {Csymbol};
 terminal BitNotOp_t     '~' precedence=14, lexer classes {Csymbol};
 terminal LogicalNotOp_t '!' precedence=14, lexer classes {Csymbol};
 
+terminal AddOp_t '+' association=left, precedence=12, lexer classes {Csymbol};
+
 terminal BitAndOp_t '&' association=left, precedence=8, lexer classes {Csymbol};
 
 terminal BitXorOp_t '^' association=left, precedence=7, lexer classes {Csymbol};
@@ -55,7 +57,7 @@ concrete productions top::LogicExpr_c
   { top.ast = e.ast; }
   
 | f::LogicIdentifier_t '(' a::LogicExprs_c ')'
-  { top.ast = callLogicExpr(fromLogicId(f), a.ast, location=top.location); }
+  { top.ast = applyLogicExpr(fromLogicId(f), a.ast, location=top.location); }
 | e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t ']'
   { top.ast = bitSelectLogicExpr(e.ast, toInt(i.lexeme), location=top.location); }
 | e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t '..' j::DecConstant_t ']'
@@ -65,6 +67,9 @@ concrete productions top::LogicExpr_c
   { top.ast = logicalNotLogicExpr(e.ast, location=top.location); }
 | BitNotOp_t e::LogicExpr_c
   { top.ast = bitNotLogicExpr(e.ast, location=top.location); }
+  
+| e1::LogicExpr_c AddOp_t e2::LogicExpr_c
+  { top.ast = addLogicExpr(e1.ast, e2.ast, location=top.location); }
   
 | e1::LogicExpr_c BitAndOp_t e2::LogicExpr_c
   { top.ast = bitAndLogicExpr(e1.ast, e2.ast, location=top.location); }

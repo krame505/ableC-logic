@@ -60,19 +60,18 @@ top::LogicExpr ::= id::Name
   top.errors <- id.logicValueLookupCheck;
 }
 
-abstract production callLogicExpr
+abstract production applyLogicExpr
 top::LogicExpr ::= f::Name a::LogicExprs
 {
   top.pp = parens( ppConcat([ f.pp, parens( ppImplode( cat( comma(), space() ), a.pps ))]) );
   top.host = directCallExpr(getLogicFunctionHostName(f), a.host, location=top.location);
   top.logicType = f.logicFunctionItem.returnLogicType;
   top.errors := a.errors;
-  top.flowDefs = a.argumentFlowDefs ++ functionFlowGraph.appliedFlowDefs;
-  top.flowExprs = functionFlowGraph.appliedFlowExprs;
   
-  local functionFlowGraph::FlowGraph = f.logicFunctionItem.flowGraph;
-  functionFlowGraph.callId = toString(genInt());
-  functionFlowGraph.arguments = a.argumentFlowExprs;
+  local applyResult::Pair<[FlowDef] [FlowExpr]> =
+    applyFlowGraph(f.logicFunctionItem.flowGraph, a.argumentFlowExprs);
+  top.flowDefs = a.argumentFlowDefs ++ applyResult.fst;
+  top.flowExprs = applyResult.snd;
   
   a.argumentPosition = 1;
   a.expectedLogicTypes = f.logicFunctionItem.parameterLogicTypes;
@@ -185,7 +184,7 @@ top::LogicExpr ::= e::LogicExpr
   top.flowDefs = e.flowDefs;
   top.flowExprs = [notFlowExpr(foldr1(orFlowExpr, e.flowExprs))];
 }
-{-
+
 abstract production addLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 {
@@ -193,10 +192,26 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host = addExpr(e1.host, e2.host, location=top.location);
   top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
   top.errors := e1.errors ++ e2.errors;
+  
+  local halfAddFlowGraph::FlowGraph = head(lookupScope("halfAdd", top.logicFunctionEnv)).flowGraph;
+  local fullAddFlowGraph::FlowGraph = head(lookupScope("fullAdd", top.logicFunctionEnv)).flowGraph;
+  local buildAdder::(Pair<[FlowDef] [FlowExpr]> ::= [FlowExpr] [FlowExpr]) =
+    \ lhs::[FlowExpr] rhs::[FlowExpr] ->
+      case lhs, rhs of
+        h1 :: t1, h2 :: t2 ->
+          let rest::Pair<[FlowDef] [FlowExpr]> = buildAdder(t1, t2)
+          in let applyRes::Pair<[FlowDef] [FlowExpr]> = applyFlowGraph(fullAddFlowGraph, [h1, h2, head(rest.snd)])
+             in pair(rest.fst ++ applyRes.fst, applyRes.snd ++ rest.snd)
+             end
+          end
+      | [h1], [h2] -> applyFlowGraph(halfAddFlowGraph, [h1, h2])
+      | _, _ -> error("Invalid adder inputs")
+      end;
   local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
   local rhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
-  top.flowDefs = e1.flowDefs ++ e2.flowDefs ++ lhsBitPad.fst ++ rhsBitPad.fst;
-  top.flowExprs = zipWith(andFlowExpr, lhsBitPad.snd, rhsBitPad.snd);
+  local adder::Pair<[FlowDef] [FlowExpr]> = buildAdder(lhsBitPad.snd, rhsBitPad.snd);
+  top.flowDefs = e1.flowDefs ++ e2.flowDefs ++ lhsBitPad.fst ++ rhsBitPad.fst ++ adder.fst;
+  top.flowExprs = tail(adder.snd); -- Throw away the carry bit so output is the same width
   
   top.errors <-
     if !e1.logicType.isIntegerType
@@ -206,7 +221,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
     if !e2.logicType.isIntegerType
     then [err(top.location, s"Operand to + must have an integer type, but got ${show(80, e2.logicType.pp)}")]
     else [];
-}-}
+}
 
 abstract production bitAndLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
