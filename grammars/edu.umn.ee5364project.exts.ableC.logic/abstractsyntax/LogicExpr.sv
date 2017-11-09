@@ -157,7 +157,6 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
 }
 
 -- Built-in C operators
--- TODO: Binary flat-fold flow translation for logic ops
 abstract production bitNotLogicExpr
 top::LogicExpr ::= e::LogicExpr
 {
@@ -182,7 +181,7 @@ top::LogicExpr ::= e::LogicExpr
   top.logicType = boolLogicType();
   top.errors := e.errors;
   top.flowDefs = e.flowDefs;
-  top.flowExprs = [notFlowExpr(foldr1(orFlowExpr, e.flowExprs))];
+  top.flowExprs = [notFlowExpr(foldBinary1(orFlowExpr, e.flowExprs))];
 }
 
 abstract production addLogicExpr
@@ -317,7 +316,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.errors := e1.errors ++ e2.errors;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
   top.flowExprs =
-    [andFlowExpr(foldr1(orFlowExpr, e1.flowExprs), foldr1(orFlowExpr, e2.flowExprs))];
+    [andFlowExpr(foldBinary1(orFlowExpr, e1.flowExprs), foldBinary1(orFlowExpr, e2.flowExprs))];
 }
 
 abstract production logicalOrLogicExpr
@@ -329,7 +328,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.errors := e1.errors ++ e2.errors;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
   top.flowExprs =
-    [orFlowExpr(foldr1(orFlowExpr, e1.flowExprs), foldr1(orFlowExpr, e2.flowExprs))];
+    [orFlowExpr(foldBinary1(orFlowExpr, e1.flowExprs), foldBinary1(orFlowExpr, e2.flowExprs))];
 }
 
 inherited attribute expectedParameterNames::[String];

@@ -67,7 +67,7 @@ logic unsigned:16 opTest(unsigned:8 x, unsigned:16 y) {
 }
 
 logic unsigned:16 opTest2(unsigned:16 x) {
-  return ~x;
+  return !x;
 }
 
 logic signed:16 opTest3(signed:8 x, signed:16 y) {

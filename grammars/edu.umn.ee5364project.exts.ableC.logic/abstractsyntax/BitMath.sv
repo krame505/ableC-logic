@@ -84,6 +84,19 @@ function range
   return if min < max then min :: range(min + 1, max) else [];
 }
 
+function foldBinary1
+a ::= f::(a ::= a a) l::[a]
+{
+  return case l of
+    [] -> error("Expected at least one element")
+  | [h] -> h
+  | _ ->
+    let n::Integer = length(l) / 2
+    in f(foldBinary1(f, take(n, l)), foldBinary1(f, drop(n, l)))
+    end
+  end;
+}
+
 {-
 function padBits
 Bits ::= width::Integer bs::Bits
