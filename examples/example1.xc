@@ -88,6 +88,12 @@ logic unsigned:3 addTest(unsigned:3 a, unsigned:3 b) {
   return a + b;
 }
 
+logic bool foo4(unsigned:2 a) {
+  bool b = a[0] | a[1];
+  bool c = !false && b;
+  return b ^ c;
+}
+
 int main (int argc, char **argv) {
 
   printf("0x%x\n", foo(12, true));

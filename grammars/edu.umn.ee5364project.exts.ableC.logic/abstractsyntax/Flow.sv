@@ -25,18 +25,18 @@ autocopy attribute renameFn::(String ::= String); -- Renaming function to apply 
 
 -- Graph simplification
 autocopy attribute referenceEnv::tm:Map<String Unit>; -- Map that contains an entry for every time an id is referenced
-synthesized attribute collapsed<a>::a; -- Collapse together nodes with only one reference, remove unused nodes
-synthesized attribute referencedNodes::[String]; -- The list of nodes referenced in a logic expr or def
+synthesized attribute simplified<a>::a; -- Collapse together nodes with only one reference, remove unused nodes
 synthesized attribute canCollapse::Boolean; -- True if a def can be removed
 synthesized attribute isSimple::Boolean; -- True if an expression may be duplicated without introducing extra logic
+synthesized attribute referencedNodes::[String]; -- The list of nodes referenced in a logic expr or def
 
-nonterminal FlowGraph with callId, arguments, pp, flowDefs, flowExprs, appliedFlowDefs, appliedFlowExprs, collapsed<FlowGraph>;
+nonterminal FlowGraph with callId, arguments, pp, flowDefs, flowExprs, appliedFlowDefs, appliedFlowExprs, simplified<FlowGraph>;
 flowtype FlowGraph = decorate {};
 
 abstract production flowGraph
 top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
 {
-  propagate collapsed;
+  propagate simplified;
   top.pp =
     ppConcat([
       text(name), space(),
@@ -61,7 +61,7 @@ top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
   flowExprs.referenceEnv = flowDefs.referenceEnv;
 }
 
-nonterminal FlowDefs with flowEnv, renameFn, arguments, referenceEnv, pps, flowDefs, flowContribs, appliedFlowDefs, collapsed<FlowDefs>, referencedNodes;
+nonterminal FlowDefs with flowEnv, renameFn, arguments, referenceEnv, pps, flowDefs, flowContribs, appliedFlowDefs, simplified<FlowDefs>, referencedNodes;
 flowtype FlowDefs = decorate {flowEnv, referenceEnv};
 
 abstract production consFlowDef
@@ -71,7 +71,7 @@ top::FlowDefs ::= h::FlowDef t::FlowDefs
   top.flowDefs = h :: t.flowDefs;
   top.flowContribs = h.flowContribs ++ t.flowContribs;
   top.appliedFlowDefs = h.applied :: t.appliedFlowDefs;
-  top.collapsed = if h.canCollapse then t.collapsed else consFlowDef(h.collapsed, t.collapsed);
+  top.simplified = if h.canCollapse then t.simplified else consFlowDef(h.simplified, t.simplified);
   top.referencedNodes = h.referencedNodes ++ t.referencedNodes;
   
   t.flowEnv = tm:add(h.flowContribs, top.flowEnv);
@@ -80,7 +80,7 @@ top::FlowDefs ::= h::FlowDef t::FlowDefs
 abstract production nilFlowDef
 top::FlowDefs ::= 
 {
-  propagate collapsed;
+  propagate simplified;
   top.pps = [];
   top.flowDefs = [];
   top.flowContribs = [];
@@ -88,27 +88,27 @@ top::FlowDefs ::=
   top.referencedNodes = [];
 }
 
-nonterminal FlowDef with flowEnv, renameFn, arguments, referenceEnv, pp, flowContribs, applied<FlowDef>, collapsed<FlowDef>, referencedNodes, canCollapse;
+nonterminal FlowDef with flowEnv, renameFn, arguments, referenceEnv, pp, flowContribs, applied<FlowDef>, simplified<FlowDef>, canCollapse, referencedNodes;
 flowtype FlowDef = decorate {flowEnv, referenceEnv};
 
 abstract production flowDef
 top::FlowDef ::= id::String fe::FlowExpr
 {
-  propagate collapsed;
+  propagate simplified;
   top.pp = pp"${text(id)} = ${fe.pp};";
   top.flowContribs = [pair(id, fe)];
   top.applied = flowDef(top.renameFn(id), fe.applied);
+  top.canCollapse = canCollapse(id, fe);
   top.referencedNodes = fe.referencedNodes;
-  top.canCollapse = fe.isSimple || length(tm:lookup(id, top.referenceEnv)) <= 1;
 }
 
-nonterminal FlowExprs with flowEnv, renameFn, arguments, referenceEnv, pps, flowExprs, appliedFlowExprs, collapsed<FlowExprs>, referencedNodes;
+nonterminal FlowExprs with flowEnv, renameFn, arguments, referenceEnv, pps, flowExprs, appliedFlowExprs, simplified<FlowExprs>, referencedNodes;
 flowtype FlowExprs = decorate {flowEnv, referenceEnv};
 
 abstract production consFlowExpr
 top::FlowExprs ::= h::FlowExpr t::FlowExprs
 {
-  propagate collapsed;
+  propagate simplified;
   top.pps = h.pp :: t.pps;
   top.flowExprs = h :: t.flowExprs;
   top.appliedFlowExprs = h.applied :: t.appliedFlowExprs;
@@ -118,14 +118,14 @@ top::FlowExprs ::= h::FlowExpr t::FlowExprs
 abstract production nilFlowExpr
 top::FlowExprs ::= 
 {
-  propagate collapsed;
+  propagate simplified;
   top.pps = [];
   top.flowExprs = [];
   top.appliedFlowExprs = [];
   top.referencedNodes = [];
 }
 
-nonterminal FlowExpr with flowEnv, renameFn, arguments, referenceEnv, pp, applied<FlowExpr>, collapsed<FlowExpr>, referencedNodes, isSimple;
+nonterminal FlowExpr with flowEnv, renameFn, arguments, referenceEnv, pp, applied<FlowExpr>, simplified<FlowExpr>, referencedNodes, isSimple;
 flowtype FlowExpr = decorate {flowEnv, referenceEnv};
 
 aspect default production
@@ -137,17 +137,17 @@ top::FlowExpr ::=
 abstract production constantFlowExpr
 top::FlowExpr ::= b::Boolean
 {
-  propagate applied, collapsed;
+  propagate applied, simplified;
   top.pp = if b then pp"true" else pp"false";
   top.referencedNodes = [];
   top.isSimple = true;
 }
 
--- Invariant: A given parameter is only referenced in a flow graph once
+-- Invariant: A given parameter is only referenced in a flow graph at most once
 abstract production parameterFlowExpr
 top::FlowExpr ::= i::Integer
 {
-  propagate collapsed;
+  propagate simplified;
   top.pp = brackets(text(toString(i)));
   top.applied = head(drop(i, top.arguments));
   top.referencedNodes = [];
@@ -161,37 +161,64 @@ top::FlowExpr ::= id::String
   top.applied = nodeFlowExpr(top.renameFn(id));
   
   production refNode::Decorated FlowExpr = head(tm:lookup(id, top.flowEnv));
-  local canCollapse::Boolean = refNode.isSimple || length(tm:lookup(id, top.referenceEnv)) <= 1;
-  top.collapsed = if canCollapse then refNode.collapsed else nodeFlowExpr(id);
+  top.simplified = if canCollapse(id, refNode) then refNode.simplified else nodeFlowExpr(id);
   top.referencedNodes = [id];
-  top.isSimple = if canCollapse then refNode.isSimple else true;
+  top.isSimple = true;
 }
 
 abstract production andFlowExpr
 top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
-  propagate applied, collapsed;
+  propagate applied;
   top.pp = pp"(${e1.pp} & ${e2.pp})";
+  top.simplified =
+    case e1.simplified, e2.simplified of
+      constantFlowExpr(false), _ -> constantFlowExpr(false)
+    | _, constantFlowExpr(false) -> constantFlowExpr(false)
+    | constantFlowExpr(true), s -> s
+    | s, constantFlowExpr(true) -> s
+    | s1, s2 -> andFlowExpr(s1, s2)
+    end;
   top.referencedNodes = e1.referencedNodes ++ e2.referencedNodes;
 }
 
 abstract production orFlowExpr
 top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
-  propagate applied, collapsed;
+  propagate applied;
   top.pp = pp"(${e1.pp} | ${e2.pp})";
+  top.simplified =
+    case e1.simplified, e2.simplified of
+      constantFlowExpr(false), s -> s
+    | s, constantFlowExpr(false) -> s
+    | constantFlowExpr(true), _ -> constantFlowExpr(true)
+    | _, constantFlowExpr(true) -> constantFlowExpr(true)
+    | s1, s2 -> orFlowExpr(s1, s2)
+    end;
   top.referencedNodes = e1.referencedNodes ++ e2.referencedNodes;
 }
 
 abstract production notFlowExpr
 top::FlowExpr ::= e::FlowExpr
 {
-  propagate applied, collapsed;
+  propagate applied;
   top.pp = pp"(!${e.pp})";
+  top.simplified =
+    case e.simplified of 
+      constantFlowExpr(b) -> constantFlowExpr(!b)
+    | s -> notFlowExpr(s)
+    end;
   top.referencedNodes = e.referencedNodes;
 }
 
 -- Utility functions
+-- Helper for graph simplification, check if a flow def can be removed
+function canCollapse
+Boolean ::= id::String fe::Decorated FlowExpr
+{
+  return fe.simplified.isSimple || length(tm:lookup(id, fe.referenceEnv)) <= 1;
+}
+
 -- Construct a flow graph from lists of flow defs and flow exprs
 function buildFlowGraph
 FlowGraph ::= name::String flowDefs::[FlowDef] flowExprs::[FlowExpr]
