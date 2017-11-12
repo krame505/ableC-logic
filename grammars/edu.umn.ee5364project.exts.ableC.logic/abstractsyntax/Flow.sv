@@ -177,6 +177,7 @@ top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
     | _, constantFlowExpr(false) -> constantFlowExpr(false)
     | constantFlowExpr(true), s -> s
     | s, constantFlowExpr(true) -> s
+    | notFlowExpr(s1), notFlowExpr(s2) -> notFlowExpr(orFlowExpr(s1, s2))
     | s1, s2 -> andFlowExpr(s1, s2)
     end;
   top.referencedNodes = e1.referencedNodes ++ e2.referencedNodes;
@@ -193,6 +194,7 @@ top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
     | s, constantFlowExpr(false) -> s
     | constantFlowExpr(true), _ -> constantFlowExpr(true)
     | _, constantFlowExpr(true) -> constantFlowExpr(true)
+    | notFlowExpr(s1), notFlowExpr(s2) -> notFlowExpr(andFlowExpr(s1, s2))
     | s1, s2 -> orFlowExpr(s1, s2)
     end;
   top.referencedNodes = e1.referencedNodes ++ e2.referencedNodes;
@@ -206,6 +208,7 @@ top::FlowExpr ::= e::FlowExpr
   top.simplified =
     case e.simplified of 
       constantFlowExpr(b) -> constantFlowExpr(!b)
+    | notFlowExpr(s) -> s
     | s -> notFlowExpr(s)
     end;
   top.referencedNodes = e.referencedNodes;
