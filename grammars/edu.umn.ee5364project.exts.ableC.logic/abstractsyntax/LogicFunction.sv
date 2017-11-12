@@ -80,7 +80,9 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       body.host);
   top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
   top.errors := ret.errors ++ params.errors ++ body.errors;
-  top.flowGraph = buildFlowGraph(id.name, params.flowDefs ++ body.flowDefs, body.flowExprs).simplified;
+  local bitPad::Pair<[FlowDef] [FlowExpr]> = ret.logicType.bitPad(body.flowExprs);
+  top.flowGraph =
+    buildFlowGraph(id.name, params.flowDefs ++ body.flowDefs ++ bitPad.fst, bitPad.snd).simplified;
   
   top.name = id.name;
   top.parameterLogicTypes = params.logicTypes;

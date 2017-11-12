@@ -33,7 +33,7 @@ top::LogicExpr ::= signed::Boolean bits::Bits
         noIntSuffix(), -- TODO: Does this need a suffix?
         location=builtin),
       location=top.location);
-  top.logicType = if signed then signedLogicType(length(bits)) else signedLogicType(length(bits));
+  top.logicType = if signed then signedLogicType(length(bits)) else unsignedLogicType(length(bits));
   top.errors := [];
   top.flowDefs = [];
   top.flowExprs = map(constantFlowExpr, bits);
@@ -200,7 +200,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
         h1 :: t1, h2 :: t2 ->
           let rest::Pair<[FlowDef] [FlowExpr]> = buildAdder(t1, t2)
           in let applyRes::Pair<[FlowDef] [FlowExpr]> = applyFlowGraph(fullAddFlowGraph, [h1, h2, head(rest.snd)])
-             in pair(rest.fst ++ applyRes.fst, applyRes.snd ++ rest.snd)
+             in pair(rest.fst ++ applyRes.fst, applyRes.snd ++ tail(rest.snd))
              end
           end
       | [h1], [h2] -> applyFlowGraph(halfAddFlowGraph, [h1, h2])

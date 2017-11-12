@@ -84,6 +84,10 @@ logic bool foo3(unsigned:3 a) {
   return b & c | !b ^ !c;
 }
 
+logic signed:4 addTest2() {
+  return 5 + 7;
+}
+
 logic unsigned:3 addTest(unsigned:3 a, unsigned:3 b) {
   return a + b;
 }
