@@ -2,6 +2,17 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 nonterminal LogicExpr with logicValueEnv, logicFunctionEnv, pp, host<Expr>, logicType, errors, flowDefs, flowExprs, location;
 
+abstract production errorLogicExpr
+top::LogicExpr ::= msg::[Message]
+{
+  top.pp = ppConcat([ text("/*"), text(messagesToString(msg)), text("*/") ]);
+  top.host = errorExpr(msg, location=top.location);
+  top.logicType = errorLogicType();
+  top.errors := msg;
+  top.flowDefs = [];
+  top.flowExprs = error("Can't compute flow on tree with errors");
+}
+
 -- Direct values
 abstract production boolConstantLogicExpr
 top::LogicExpr ::= value::Boolean
@@ -22,28 +33,23 @@ top::LogicExpr ::= value::Boolean
 }
 
 abstract production intConstantLogicExpr
-top::LogicExpr ::= signed::Boolean bits::Bits
+top::LogicExpr ::= signed::Boolean value::Integer
 {
-  top.pp = pp"0b${ppConcat(map(\bit::Boolean -> if bit then pp"1" else pp"0", bits))}"; -- TODO: Show hex if width is multiple of 4
+  --top.pp = pp"0b${ppConcat(map(\bit::Boolean -> if bit then pp"1" else pp"0", bits))}"; -- TODO: Show hex if width is multiple of 4
+  top.pp = cat(text(toString(value)), if signed then notext() else text("u"));
   top.host =
     realConstant(
       integerConstant(
-        toString(bitsToInt(signed, bits)),
+        toString(value),
         !signed,
         noIntSuffix(), -- TODO: Does this need a suffix?
         location=builtin),
       location=top.location);
+  local bits::[Boolean] = intToBits(signed, value);
   top.logicType = if signed then signedLogicType(length(bits)) else unsignedLogicType(length(bits));
   top.errors := [];
   top.flowDefs = [];
   top.flowExprs = map(constantFlowExpr, bits);
-}
-
-abstract production intLiteralLogicExpr
-top::LogicExpr ::= signed::Boolean value::Integer
-{
-  top.pp = cat(text(toString(value)), if signed then notext() else text("u"));
-  forwards to intConstantLogicExpr(signed, intToBits(signed, value), location=top.location);
 }
 
 abstract production varLogicExpr
@@ -184,6 +190,33 @@ top::LogicExpr ::= e::LogicExpr
   top.flowExprs = [notFlowExpr(foldBinary1(orFlowExpr, e.flowExprs))];
 }
 
+abstract production negateLogicExpr
+top::LogicExpr ::= e::LogicExpr
+{
+  top.pp = parens( cat( text("-"), e.pp ) );
+  top.host = negativeExpr(e.host, location=top.location);
+  top.logicType =
+    case e.logicType of
+      signedLogicType(width) -> signedLogicType(width)
+    | unsignedLogicType(width) -> signedLogicType(width + 1)
+    | _ -> errorLogicType()
+    end;
+  top.errors := e.errors;
+  local bitPad::[FlowExpr] = -- Add a leading 0 if we do an unsigned-to-signed conversion
+    case e.logicType of
+      unsignedLogicType(_) -> constantFlowExpr(false) :: e.flowExprs
+    | _ -> e.flowExprs
+    end;
+  local result::Pair<[FlowDef] [FlowExpr]> = makeNegateFlowExprs(top.logicFunctionEnv, bitPad);
+  top.flowDefs = e.flowDefs ++ result.fst;
+  top.flowExprs = result.snd;
+  
+  top.errors <-
+    if !e.logicType.isIntegerType
+    then [err(top.location, s"Operand to unary - must have an integer type, but got ${show(80, e.logicType.pp)}")]
+    else [];
+}
+
 abstract production addLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 {
@@ -191,26 +224,11 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host = addExpr(e1.host, e2.host, location=top.location);
   top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
   top.errors := e1.errors ++ e2.errors;
-  
-  local halfAddFlowGraph::FlowGraph = head(lookupScope("halfAdd", top.logicFunctionEnv)).flowGraph;
-  local fullAddFlowGraph::FlowGraph = head(lookupScope("fullAdd", top.logicFunctionEnv)).flowGraph;
-  local buildAdder::(Pair<[FlowDef] [FlowExpr]> ::= [FlowExpr] [FlowExpr]) =
-    \ lhs::[FlowExpr] rhs::[FlowExpr] ->
-      case lhs, rhs of
-        h1 :: t1, h2 :: t2 ->
-          let rest::Pair<[FlowDef] [FlowExpr]> = buildAdder(t1, t2)
-          in let applyRes::Pair<[FlowDef] [FlowExpr]> = applyFlowGraph(fullAddFlowGraph, [h1, h2, head(rest.snd)])
-             in pair(rest.fst ++ applyRes.fst, applyRes.snd ++ tail(rest.snd))
-             end
-          end
-      | [h1], [h2] -> applyFlowGraph(halfAddFlowGraph, [h1, h2])
-      | _, _ -> error("Invalid adder inputs")
-      end;
   local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
   local rhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
-  local adder::Pair<[FlowDef] [FlowExpr]> = buildAdder(lhsBitPad.snd, rhsBitPad.snd);
-  top.flowDefs = e1.flowDefs ++ e2.flowDefs ++ lhsBitPad.fst ++ rhsBitPad.fst ++ adder.fst;
-  top.flowExprs = tail(adder.snd); -- Throw away the carry bit so output is the same width
+  local result::Pair<[FlowDef] [FlowExpr]> = makeAddFlowExprs(top.logicFunctionEnv, lhsBitPad.snd, rhsBitPad.snd);
+  top.flowDefs = e1.flowDefs ++ e2.flowDefs ++ lhsBitPad.fst ++ rhsBitPad.fst ++ result.fst;
+  top.flowExprs = result.snd;
   
   top.errors <-
     if !e1.logicType.isIntegerType
@@ -219,6 +237,29 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.errors <-
     if !e2.logicType.isIntegerType
     then [err(top.location, s"Operand to + must have an integer type, but got ${show(80, e2.logicType.pp)}")]
+    else [];
+}
+
+abstract production subLogicExpr
+top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
+{
+  top.pp = pp"(${e1.pp} - ${e2.pp})";
+  top.host = subExpr(e1.host, e2.host, location=top.location);
+  top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
+  top.errors := e1.errors ++ e2.errors;
+  local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
+  local rhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
+  local result::Pair<[FlowDef] [FlowExpr]> = makeSubFlowExprs(top.logicFunctionEnv, lhsBitPad.snd, rhsBitPad.snd);
+  top.flowDefs = e1.flowDefs ++ e2.flowDefs ++ lhsBitPad.fst ++ rhsBitPad.fst ++ result.fst;
+  top.flowExprs = result.snd;
+  
+  top.errors <-
+    if !e1.logicType.isIntegerType
+    then [err(top.location, s"Operand to - must have an integer type, but got ${show(80, e1.logicType.pp)}")]
+    else [];
+  top.errors <-
+    if !e2.logicType.isIntegerType
+    then [err(top.location, s"Operand to - must have an integer type, but got ${show(80, e2.logicType.pp)}")]
     else [];
 }
 

@@ -84,6 +84,16 @@ logic bool foo3(unsigned:3 a) {
   return b & c | !b ^ !c;
 }
 
+logic bool foo4(unsigned:2 a) {
+  bool b = a[0] | a[1];
+  bool c = !false && b;
+  return b ^ c;
+}
+
+logic signed:4 addTest1(signed:4 a) {
+  return a + 1;
+}
+
 logic signed:4 addTest2() {
   return 5 + 7;
 }
@@ -92,10 +102,13 @@ logic unsigned:3 addTest(unsigned:3 a, unsigned:3 b) {
   return a + b;
 }
 
-logic bool foo4(unsigned:2 a) {
-  bool b = a[0] | a[1];
-  bool c = !false && b;
-  return b ^ c;
+logic signed:4 foo5() {
+  return addTest1(addTest1(addTest1(5)));
+}
+
+logic signed:16 foo6() {
+  unsigned:8 y = 6;
+  return 1 + 2 + (-3 - 4) + 5 + -y + 7;
 }
 
 int main (int argc, char **argv) {

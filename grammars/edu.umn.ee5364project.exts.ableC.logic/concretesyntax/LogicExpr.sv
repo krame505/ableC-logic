@@ -4,8 +4,10 @@ terminal MaxPrecLBracket_t /\[/ precedence=15, lexer classes {Csymbol};
 
 terminal BitNotOp_t     '~' precedence=14, lexer classes {Csymbol};
 terminal LogicalNotOp_t '!' precedence=14, lexer classes {Csymbol};
+terminal NegateOp_t     '-' precedence=14, lexer classes {Csymbol};
 
 terminal AddOp_t '+' association=left, precedence=12, lexer classes {Csymbol};
+terminal SubOp_t '-' association=left, precedence=12, lexer classes {Csymbol};
 
 terminal BitAndOp_t '&' association=left, precedence=8, lexer classes {Csymbol};
 
@@ -42,11 +44,9 @@ concrete productions top::LogicExpr_c
 | 'false'
    { top.ast = boolConstantLogicExpr(false, location=top.location); }
 | c::DecConstant_t
-  { top.ast = intLiteralLogicExpr(true, toInt(c.lexeme), location=top.location); }
-| '-' c::DecConstant_t
-  { top.ast = intLiteralLogicExpr(true, -toInt(c.lexeme), location=top.location); }
+  { top.ast = intConstantLogicExpr(true, toInt(c.lexeme), location=top.location); }
 | c::DecConstantU_t
-  { top.ast = intLiteralLogicExpr(false, toInt(substring(0, length(c.lexeme) - 1, c.lexeme)), location=top.location); }
+  { top.ast = intConstantLogicExpr(false, toInt(substring(0, length(c.lexeme) - 1, c.lexeme)), location=top.location); }
 {-
 | c::OctConstant_t
 | c::OctConstantU_t
@@ -63,6 +63,8 @@ concrete productions top::LogicExpr_c
 | e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t '..' j::DecConstant_t ']'
   { top.ast = bitSelectRangeLogicExpr(e.ast, toInt(i.lexeme), toInt(j.lexeme), location=top.location); }
 
+| NegateOp_t e::LogicExpr_c
+  { top.ast = negateLogicExpr(e.ast, location=top.location); }
 | LogicalNotOp_t e::LogicExpr_c
   { top.ast = logicalNotLogicExpr(e.ast, location=top.location); }
 | BitNotOp_t e::LogicExpr_c
@@ -70,6 +72,8 @@ concrete productions top::LogicExpr_c
   
 | e1::LogicExpr_c AddOp_t e2::LogicExpr_c
   { top.ast = addLogicExpr(e1.ast, e2.ast, location=top.location); }
+| e1::LogicExpr_c SubOp_t e2::LogicExpr_c
+  { top.ast = subLogicExpr(e1.ast, e2.ast, location=top.location); }
   
 | e1::LogicExpr_c BitAndOp_t e2::LogicExpr_c
   { top.ast = bitAndLogicExpr(e1.ast, e2.ast, location=top.location); }

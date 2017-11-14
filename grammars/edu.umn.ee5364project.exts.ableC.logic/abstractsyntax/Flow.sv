@@ -214,6 +214,46 @@ top::FlowExpr ::= e::FlowExpr
   top.referencedNodes = e.referencedNodes;
 }
 
+-- Flow constructor functions
+function makeNegateFlowExprs
+Pair<[FlowDef] [FlowExpr]> ::= logicFunctionEnv::Scopes<LogicFunctionItem> fes::[FlowExpr]
+{
+  return
+    makeAddFlowExprs(
+      logicFunctionEnv,
+      map(notFlowExpr, fes),
+      map(constantFlowExpr, repeat(false, length(fes) - 1) ++ [true]));
+}
+
+function makeAddFlowExprs
+Pair<[FlowDef] [FlowExpr]> ::= logicFunctionEnv::Scopes<LogicFunctionItem> lhs::[FlowExpr] rhs::[FlowExpr]
+{
+  local halfAddFlowGraph::FlowGraph = head(lookupScope("halfAdd", logicFunctionEnv)).flowGraph;
+  local fullAddFlowGraph::FlowGraph = head(lookupScope("fullAdd", logicFunctionEnv)).flowGraph;
+  local buildAdder::(Pair<[FlowDef] [FlowExpr]> ::= [FlowExpr] [FlowExpr]) =
+    \ lhs::[FlowExpr] rhs::[FlowExpr] ->
+      case lhs, rhs of
+        h1 :: t1, h2 :: t2 ->
+          let rest::Pair<[FlowDef] [FlowExpr]> = buildAdder(t1, t2)
+          in let applyRes::Pair<[FlowDef] [FlowExpr]> = applyFlowGraph(fullAddFlowGraph, [h1, h2, head(rest.snd)])
+             in pair(rest.fst ++ applyRes.fst, applyRes.snd ++ tail(rest.snd))
+             end
+          end
+      | [h1], [h2] -> applyFlowGraph(halfAddFlowGraph, [h1, h2])
+      | _, _ -> error(s"Invalid adder inputs ${hackUnparse(lhs)} and ${hackUnparse(rhs)}")
+      end;
+  local adder::Pair<[FlowDef] [FlowExpr]> = buildAdder(lhs, rhs);
+  return pair(adder.fst, tail(adder.snd)); -- Throw away the carry bit so output is the same width
+}
+
+function makeSubFlowExprs
+Pair<[FlowDef] [FlowExpr]> ::= logicFunctionEnv::Scopes<LogicFunctionItem> lhs::[FlowExpr] rhs::[FlowExpr]
+{
+  local negateResult::Pair<[FlowDef] [FlowExpr]> = makeNegateFlowExprs(logicFunctionEnv, rhs);
+  local addResult::Pair<[FlowDef] [FlowExpr]> = makeAddFlowExprs(logicFunctionEnv, lhs, negateResult.snd);
+  return pair(negateResult.fst ++ addResult.fst, addResult.snd);
+}
+
 -- Utility functions
 -- Helper for graph simplification, check if a flow def can be removed
 function canCollapse
@@ -223,7 +263,7 @@ Boolean ::= id::String fe::Decorated FlowExpr
 }
 
 -- Construct a flow graph from lists of flow defs and flow exprs
-function buildFlowGraph
+function makeFlowGraph
 FlowGraph ::= name::String flowDefs::[FlowDef] flowExprs::[FlowExpr]
 {
   return

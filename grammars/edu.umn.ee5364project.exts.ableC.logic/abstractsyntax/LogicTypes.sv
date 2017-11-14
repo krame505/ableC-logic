@@ -62,20 +62,21 @@ top::LogicTypeExpr ::= msg::[Message]
 synthesized attribute logicTypeExpr::LogicTypeExpr;
 synthesized attribute width::Integer;
 
-synthesized attribute hostToUnsignedProd::(Expr ::= Expr Location);
-synthesized attribute hostFromUnsignedProd::(Expr ::= Expr Location);
 synthesized attribute bitPad::(Pair<[FlowDef] [FlowExpr]> ::= [FlowExpr]);
 
-nonterminal LogicType with pp, logicTypeExpr, width, isIntegerType, hostToUnsignedProd, hostFromUnsignedProd, bitPad;
+synthesized attribute hostToUnsignedProd::(Expr ::= Expr Location);
+synthesized attribute hostFromUnsignedProd::(Expr ::= Expr Location);
+
+nonterminal LogicType with pp, logicTypeExpr, width, isIntegerType, bitPad, hostToUnsignedProd, hostFromUnsignedProd;
 
 aspect default production
 top::LogicType ::=
 {
   top.isIntegerType = true;
-  top.hostToUnsignedProd = \ e::Expr l::Location -> e;
-  top.hostFromUnsignedProd = \ e::Expr l::Location -> e;
   top.bitPad =
     \ fes::[FlowExpr] -> pair([], repeat(constantFlowExpr(false), top.width - length(fes)) ++ fes);
+  top.hostToUnsignedProd = \ e::Expr l::Location -> e;
+  top.hostFromUnsignedProd = \ e::Expr l::Location -> e;
 }
 
 abstract production boolLogicType
