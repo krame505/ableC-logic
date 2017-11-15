@@ -88,22 +88,21 @@ top::FlowDefs ::=
   top.referencedNodes = [];
 }
 
-synthesized attribute flowExpr::Decorated FlowExpr;
+synthesized attribute simplifiedFlowExpr::FlowExpr;
 
-nonterminal FlowDef with flowEnv, renameFn, arguments, referenceEnv, pp, name, flowExpr, flowContribs, applied<FlowDef>, simplified<FlowDef>, canCollapse, referencedNodes;
+nonterminal FlowDef with flowEnv, renameFn, arguments, referenceEnv, pp, flowContribs, applied<FlowDef>, simplified<FlowDef>, simplifiedFlowExpr, canCollapse, referencedNodes;
 flowtype FlowDef = decorate {flowEnv, referenceEnv};
 
 abstract production flowDef
-top::FlowDef ::= id::String fe::FlowExpr
+top::FlowDef ::= id::String e::FlowExpr
 {
   propagate simplified;
-  top.pp = pp"${text(id)} = ${fe.pp};";
-  top.name = id;
-  top.flowExpr = fe;
+  top.pp = pp"${text(id)} = ${e.pp};";
   top.flowContribs = [pair(id, top)];
-  top.applied = flowDef(top.renameFn(id), fe.applied);
-  top.canCollapse = fe.simplified.isSimple || length(tm:lookup(id, fe.referenceEnv)) <= 1;
-  top.referencedNodes = fe.referencedNodes;
+  top.applied = flowDef(top.renameFn(id), e.applied);
+  top.simplifiedFlowExpr = e.simplified;
+  top.canCollapse = e.simplified.isSimple || length(tm:lookup(id, e.referenceEnv)) <= 1;
+  top.referencedNodes = e.referencedNodes;
 }
 
 nonterminal FlowExprs with flowEnv, renameFn, arguments, referenceEnv, pps, flowExprs, appliedFlowExprs, simplified<FlowExprs>, referencedNodes;
@@ -165,7 +164,7 @@ top::FlowExpr ::= id::String
   top.applied = nodeFlowExpr(top.renameFn(id));
   
   production refNode::Decorated FlowDef = head(tm:lookup(id, top.flowEnv));
-  top.simplified = if refNode.canCollapse then refNode.flowExpr.simplified else nodeFlowExpr(id);
+  top.simplified = if refNode.canCollapse then refNode.simplifiedFlowExpr else nodeFlowExpr(id);
   top.referencedNodes = [id];
   top.isSimple = true;
 }
