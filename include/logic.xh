@@ -1,24 +1,9 @@
 
-#include <stdint.h>
+
+#include <logic.h>
 
 #ifndef _LOGIC_XH
 #define _LOGIC_XH
-
-// Check that bool, true and false aren't defined as macros
-#if defined(bool) || defined(true) || defined(false)
-#error "stdbool.h is incompatible with the boolean logic extension, and should not be included"
-#endif
-
-// Provide our own definitions for boolean constructs to be used at the program level
-typedef _Bool bool;
-const bool true = 1;
-const bool false = 0;
-
-// Define macros in case these are checked for existance prior to being defined in other places
-#define bool bool
-#define true true
-#define false false
-#define __bool_true_false_are_defined 1
 
 // Generally useful logic functions
 logic unsigned:2 halfAdd(bool a, bool b) {
