@@ -14,20 +14,17 @@ top::Decl ::= f::LogicFunctionDecl
   
   f.logicFunctionEnv = top.env.logicFunctions;
   
+  -- TODO: Check for include of logic.xh
+  local localErrors::[Message] = f.errors;
   local hostTrans::Decl = functionDeclaration(f.host);
   local hostErrorTrans::Decl =
     defsDecl([valueDef("_logic_function_" ++ f.name, errorValueItem())]);
-  
-  -- TODO: Check for include of logic.xh
-  local localErrors::[Message] = f.errors;
-  local fwrd::Decl = hostTrans;
-  local errorFwrd::Decl = hostErrorTrans;
   
   forwards to
     decls(
       foldDecl([
         txtDecl(s"/*\n${show(80, f.flowGraph.pp)}\n*/"),
-        if !null(localErrors) then decls(foldDecl([warnDecl(localErrors), errorFwrd])) else fwrd,
+        if !null(localErrors) then decls(foldDecl([warnDecl(localErrors), hostErrorTrans])) else hostTrans,
         defsDecl(
           valueDef(f.name, logicFunctionValueItem(top.env, f)) ::
           map(
@@ -39,6 +36,39 @@ abstract production logicFunctionDirectCallExpr
 top::Expr ::= id::Name args::Exprs
 {
   top.pp = parens( ppConcat([ id.pp, parens( ppImplode( cat( comma(), space() ), args.pps ))]) );
+  forwards to logicFunctionCallExpr(defaultMode(), id, args, location=top.location);
+}
+
+abstract production logicFunctionCallExpr
+top::Expr ::= mode::LogicMode id::Name args::Exprs
+{
+  top.pp = pp"logic ${mode.pp} call ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
+  forwards to
+    stmtExpr(
+      logicFunctionInitStmt(mode, id),
+      logicFunctionInvokeExpr(mode, id, args, location=top.location),
+      location=builtin);
+}
+
+abstract production logicFunctionInitStmt
+top::Stmt ::= mode::LogicMode id::Name
+{
+  top.pp = pp"logic ${mode.pp} init ${id.pp};";
+  top.labelDefs := [];
+  forwards to mode.initProd(id);
+}
+
+abstract production logicFunctionInvokeExpr
+top::Expr ::= mode::LogicMode id::Name args::Exprs
+{
+  top.pp = pp"logic ${mode.pp} invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
+  forwards to mode.invokeProd(id, args, top.location);
+}
+
+abstract production hostLogicFunctionInvokeExpr
+top::Expr ::= id::Name args::Exprs
+{
+  top.pp = pp"logic host invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
   
   id.logicFunctionEnv = top.env.logicFunctions;
   
@@ -47,13 +77,52 @@ top::Expr ::= id::Name args::Exprs
   args.callExpr = top;
   args.callVariadic = false;
   
-  -- TODO: Replace MSBs with padding bits to the correct width
-  local hostTrans::Expr = directCallExpr(getLogicFunctionHostName(id), args, location=top.location);
-  
   local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
-  local fwrd::Expr = hostTrans;
+  -- TODO: Replace MSBs with padding bits to the correct width
+  local fwrd::Expr = directCallExpr(getLogicFunctionHostName(id), args, location=top.location);
   
   forwards to mkErrorCheck(localErrors, fwrd);
+}
+
+synthesized attribute initProd::(Stmt ::= Name);
+synthesized attribute invokeProd::(Expr ::= Name Exprs Location);
+
+nonterminal LogicMode with env, pp, initProd, invokeProd;
+
+abstract production hostMode
+top::LogicMode ::= 
+{
+  top.pp = pp"host";
+  top.initProd = \ id::Name -> nullStmt();
+  top.invokeProd = hostLogicFunctionInvokeExpr(_, _, location=_);
+}
+
+abstract production softMode
+top::LogicMode ::= 
+{
+  top.pp = pp"soft";
+  top.initProd = error("Not yet implemented");
+  top.invokeProd = error("Not yet implemented");
+}
+
+abstract production hardMode
+top::LogicMode ::= 
+{
+  top.pp = pp"hard";
+  top.initProd = error("Not yet implemented");
+  top.invokeProd = error("Not yet implemented");
+}
+
+abstract production defaultMode
+top::LogicMode ::= 
+{
+  top.pp = pp"default";
+  forwards to
+    if !null(lookupMisc("--xc-logic-soft", top.env))
+    then softMode()
+    else if !null(lookupMisc("--xc-logic-hard", top.env))
+    then hardMode()
+    else hostMode();
 }
 
 synthesized attribute flowGraph::FlowGraph;
