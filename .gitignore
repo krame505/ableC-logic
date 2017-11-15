@@ -8,8 +8,11 @@ build.xml
 *.jar
 
 # Other files
-*.c
+examples/*.c
+test/**/*.c
 *.i
 *.o
+*.so
+*.a
 *.out
 *.test
