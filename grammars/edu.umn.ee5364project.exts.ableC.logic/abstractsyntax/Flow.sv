@@ -43,6 +43,8 @@ top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
       braces(nestlines(2, ppConcat([terminate(line(), flowDefs.pps), pp"return ${ppImplode(pp", ", flowExprs.pps)};"])))]);
   top.flowDefs = flowDefs.flowDefs;
   top.flowExprs = flowExprs.flowExprs;
+  
+  flowExprs.position = 0;
 
   flowDefs.flowEnv = tm:empty(compareString);
   flowExprs.flowEnv = tm:add(flowDefs.flowContribs, flowDefs.flowEnv);
@@ -105,8 +107,10 @@ top::FlowDef ::= id::String e::FlowExpr
   top.referencedNodes = e.referencedNodes;
 }
 
-nonterminal FlowExprs with flowEnv, renameFn, arguments, referenceEnv, pps, flowExprs, appliedFlowExprs, simplified<FlowExprs>, referencedNodes;
-flowtype FlowExprs = decorate {flowEnv, referenceEnv};
+inherited attribute position::Integer; -- Initially 0
+
+nonterminal FlowExprs with position, flowEnv, renameFn, arguments, referenceEnv, pps, flowExprs, appliedFlowExprs, simplified<FlowExprs>, referencedNodes;
+flowtype FlowExprs = decorate {position, flowEnv, referenceEnv};
 
 abstract production consFlowExpr
 top::FlowExprs ::= h::FlowExpr t::FlowExprs
@@ -116,6 +120,8 @@ top::FlowExprs ::= h::FlowExpr t::FlowExprs
   top.flowExprs = h :: t.flowExprs;
   top.appliedFlowExprs = h.applied :: t.appliedFlowExprs;
   top.referencedNodes = h.referencedNodes ++ t.referencedNodes;
+  
+  t.position = top.position + 1;
 }
 
 abstract production nilFlowExpr

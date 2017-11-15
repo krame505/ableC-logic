@@ -11,8 +11,8 @@
 
 // Provide our own definitions for boolean constructs to be used at the program level
 typedef _Bool bool;
-const bool true = 1;
-const bool false = 0;
+static const bool true = 1;
+static const bool false = 0;
 
 // Define macros in case these are checked for existance prior to being defined in other places
 #define bool bool
@@ -25,8 +25,9 @@ const bool false = 0;
 enum {
   NUM_INPUTS = 64,
   NUM_GATES = 1024,
-  NUM_CHANNELS = NUM_INPUTS + NUM_GATES,
-  NUM_OUTPUTS = 32
+  NUM_OUTPUTS = 32,
+  
+  NUM_CHANNELS = NUM_INPUTS + NUM_GATES
 };
 
 // Functions used for software NAND translation
@@ -35,6 +36,6 @@ typedef uint32_t data_t;
 
 void soft_gate_config(channel_t gate, channel_t input1, channel_t input2);
 void soft_output_config(channel_t output, channel_t input);
-data_t soft_eval(data_t val1, data_t val2);
+data_t soft_invoke(data_t val1, data_t val2);
 
 #endif

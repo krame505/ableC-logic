@@ -71,7 +71,7 @@ top::LogicExpr ::= f::Name a::LogicExprs
 {
   top.pp = parens( ppConcat([ f.pp, parens( ppImplode( cat( comma(), space() ), a.pps ))]) );
   top.host = directCallExpr(getLogicFunctionHostName(f), a.host, location=top.location);
-  top.logicType = f.logicFunctionItem.returnLogicType;
+  top.logicType = f.logicFunctionItem.resultLogicType;
   top.errors := a.errors;
   
   local applyResult::Pair<[FlowDef] [FlowExpr]> =

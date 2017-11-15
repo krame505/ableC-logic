@@ -36,13 +36,14 @@ abstract production logicFunctionDirectCallExpr
 top::Expr ::= id::Name args::Exprs
 {
   top.pp = parens( ppConcat([ id.pp, parens( ppImplode( cat( comma(), space() ), args.pps ))]) );
-  forwards to logicFunctionCallExpr(defaultMode(), id, args, location=top.location);
+  forwards to logicFunctionCallExpr(hostMode(), id, args, location=top.location);
 }
 
 abstract production logicFunctionCallExpr
 top::Expr ::= mode::LogicMode id::Name args::Exprs
 {
   top.pp = pp"logic ${mode.pp} call ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
+  -- TODO: Check for include of logic.xh
   forwards to
     stmtExpr(
       logicFunctionInitStmt(mode, id),
@@ -55,13 +56,72 @@ top::Stmt ::= mode::LogicMode id::Name
 {
   top.pp = pp"logic ${mode.pp} init ${id.pp};";
   top.labelDefs := [];
+  -- TODO: Check for include of logic.xh
   forwards to mode.initProd(id);
+}
+
+abstract production softLogicFunctionInitStmt
+top::Stmt ::= id::Name
+{
+  top.pp = pp"logic soft init ${id.pp};";
+  top.labelDefs := [];
+  
+  -- Look up specification values defined in the header file
+  local numInputs::Integer =
+    case lookupValue("NUM_INPUTS", top.env) of
+      [enumValueItem(enumItem(_, justExpr(realConstant(integerConstant(val, _, _)))))] -> toInt(val)
+    | _ -> error("Failed to look up env value")
+    end;
+  local numGates::Integer =
+    case lookupValue("NUM_GATES", top.env) of
+      [enumValueItem(enumItem(_, justExpr(realConstant(integerConstant(val, _, _)))))] -> toInt(val)
+    | _ -> error("Failed to look up env value")
+    end;
+  local numOutputs::Integer =
+    case lookupValue("NUM_OUTPUTS", top.env) of
+      [enumValueItem(enumItem(_, justExpr(realConstant(integerConstant(val, _, _)))))] -> toInt(val)
+    | _ -> error("Failed to look up env value")
+    end;
+  local numChannels::Integer = numInputs + numGates;
+  
+  id.logicFunctionEnv = top.env.logicFunctions;
+  local flowGraph::FlowGraph = id.logicFunctionItem.flowGraph;
+  flowGraph.nextChannelIn = numInputs;
+  
+  local nandFlowGraph::NANDFlowGraph =
+    makeNANDFlowGraph(flowGraph.gateConfig, flowGraph.outputChannels);
+  
+  local localErrors::[Message] =
+    if !null(id.logicFunctionLookupCheck)
+    then id.logicFunctionLookupCheck
+    else
+      case id.logicFunctionItem.parameterLogicTypes of
+        [t1, t2] ->
+          (if t1.width != numInputs / 2
+           then [err(id.location, s"Translation requires invoked logic function parameter 1 to have width ${toString(numInputs / 2)} (got ${toString(t1.width)})")]
+           else []) ++
+          (if t2.width != numInputs / 2
+           then [err(id.location, s"Translation requires invoked logic function parameter 2 to have width ${toString(numInputs / 2)} (got ${toString(t2.width)})")]
+           else [])
+      | a -> [err(id.location, s"Translation requires invoked logic function to have exactly 2 parameters (got ${toString(length(a))})")]
+      end ++
+      (if id.logicFunctionItem.resultLogicType.width != numOutputs
+       then [err(id.location, s"Translation requires invoked logic function result to have width ${toString(numOutputs)} (got ${toString(id.logicFunctionItem.resultLogicType.width)})")]
+       else []) ++
+      (if flowGraph.nextChannelOut > numChannels
+       then [err(id.location, s"Insufficient gates available for translation (required ${toString(flowGraph.nextChannelOut - numInputs)}, ${toString(numGates)} available)")]
+       else []);
+  
+  local fwrd::Stmt = nandFlowGraph.softHostInitTrans;
+  
+  forwards to if !null(localErrors) then warnStmt(localErrors) else fwrd;
 }
 
 abstract production logicFunctionInvokeExpr
 top::Expr ::= mode::LogicMode id::Name args::Exprs
 {
   top.pp = pp"logic ${mode.pp} invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
+  -- TODO: Check for include of logic.xh
   forwards to mode.invokeProd(id, args, top.location);
 }
 
@@ -84,6 +144,13 @@ top::Expr ::= id::Name args::Exprs
   forwards to mkErrorCheck(localErrors, fwrd);
 }
 
+abstract production softLogicFunctionInvokeExpr
+top::Expr ::= id::Name args::Exprs
+{
+  top.pp = pp"logic soft invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
+  forwards to directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
+}
+
 synthesized attribute initProd::(Stmt ::= Name);
 synthesized attribute invokeProd::(Expr ::= Name Exprs Location);
 
@@ -101,8 +168,8 @@ abstract production softMode
 top::LogicMode ::= 
 {
   top.pp = pp"soft";
-  top.initProd = error("Not yet implemented");
-  top.invokeProd = error("Not yet implemented");
+  top.initProd = softLogicFunctionInitStmt;
+  top.invokeProd = softLogicFunctionInvokeExpr(_, _, location=_);
 }
 
 abstract production hardMode
@@ -127,9 +194,9 @@ top::LogicMode ::=
 
 synthesized attribute flowGraph::FlowGraph;
 synthesized attribute parameterLogicTypes::[LogicType];
-synthesized attribute returnLogicType::LogicType;
+synthesized attribute resultLogicType::LogicType;
 
-nonterminal LogicFunctionDecl with logicFunctionEnv, isTopLevel, pp, host<FunctionDecl>, logicFunctionDefs, errors, flowGraph, name, parameterLogicTypes, returnLogicType, sourceLocation;
+nonterminal LogicFunctionDecl with logicFunctionEnv, isTopLevel, pp, host<FunctionDecl>, logicFunctionDefs, errors, flowGraph, name, parameterLogicTypes, resultLogicType, sourceLocation;
 
 abstract production logicFunctionDecl
 top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters body::LogicStmts
@@ -155,7 +222,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
   
   top.name = id.name;
   top.parameterLogicTypes = params.logicTypes;
-  top.returnLogicType = ret.logicType;
+  top.resultLogicType = ret.logicType;
   top.sourceLocation = id.location;
   
   params.logicValueEnv = emptyScope();

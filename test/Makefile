@@ -15,14 +15,16 @@ GRAMMAR_SOURCES=$(shell find $(GRAMMAR_DIRS) -name *.sv -print0 | xargs -0)
 # Flags passed to silver including the appropriate directories
 override SVFLAGS+=$(addprefix -I ,$(GRAMMAR_DIRS))
 
-# All extended C files to compile
-XC_FILES=$(wildcard *.xc)
+# All extended C files to test
+XC_FILES=$(wildcard translate_error/*.xc) $(wildcard runtime_error/*.xc) $(wildcard positive/*.xc)
+# All extended C files that should translate successfully
+TRANS_XC_FILES=$(wildcard runtime_error/*.xc) $(wildcard positive/*.xc)
 # All C files that should be generated
-C_FILES=$(XC_FILES:.xc=.c)
+C_FILES=$(TRANS_XC_FILES:.xc=.c)
 # All object files that should be generated
-OBJECTS=$(XC_FILES:.xc=.o)
+OBJECTS=$(TRANS_XC_FILES:.xc=.o)
 # All executables that should be generated
-EXECUTABLES=$(XC_FILES:.xc=.out)
+EXECUTABLES=$(TRANS_XC_FILES:.xc=.out)
 # All evaluation marker files that should be generated
 TESTS=$(XC_FILES:.xc=.test)
 
@@ -43,6 +45,7 @@ LIB_DIRS=$(wildcard $(EXTS_BASE)/*/lib)
 # Flags passed to the linker specifying the appropriate directories
 override LDFLAGS+=$(addprefix -L,$(LIB_DIRS))
 # Flags passed to the linker specifying libraries to link
+# Specify skeleton is to be linked statically, everything else dynamically
 LDLIBS=-Wl,-Bstatic -llogicsim -Wl,-Bdynamic
 
 # All directories contining extension library sources
@@ -61,7 +64,7 @@ $(LIBS):
 
 $(ABLEC_JAR): $(GRAMMAR_SOURCES)
 	touch $(wildcard $(ARTIFACT)/*.sv)
-	silver -o $@ $(SVFLAGS) $(ARTIFACT)
+	silver -o $(ABLEC_JAR) $(SVFLAGS) $(ARTIFACT)
 
 %.c: %.xc $(XC_INCLUDE_SOURCES) $(ABLEC_JAR)
 	java $(JAVAFLAGS) -jar $(ABLEC_JAR) $< $(XCFLAGS)
@@ -69,12 +72,21 @@ $(ABLEC_JAR): $(GRAMMAR_SOURCES)
 %.out: %.o $(SRC_SOURCES) | libs
 	$(CC) $(LDFLAGS) $< $(LOADLIBES) $(LDLIBS) -o $@
 
+translate_error/%.test: translate_error/%.xc $(XC_INCLUDE_SOURCES) $(ABLEC_JAR)
+	@echo "java $(JAVAFLAGS) -jar $(ABLEC_JAR) $< $(XCFLAGS)"
+	@if java $(JAVAFLAGS) -jar $(ABLEC_JAR) $< $(XCFLAGS); then echo "Failed to error"; exit 1; fi
+	touch $@
+
+runtime_error/%.test: runtime_error/%.out
+	@echo "./$<"
+	@if ./$<; then echo "Failed to error"; exit 2; else echo "(exit $$?)"; fi
+	touch $@
+
 %.test: %.out
-	@echo "Running $<..."
-	@./$< || echo "(exit $$?)"
+	./$<
 	touch $@
 
 clean:
-	rm -f *~ *.i *.c *.o *.out *.test *.jar *.copperdump.html build.xml
+	rm -f *~ */*~ */*.i */*.c */*.o */*.out */*.test *.jar *.copperdump.html build.xml
 
 .PHONY: all libs $(LIBS) clean

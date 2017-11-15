@@ -4,67 +4,90 @@ import silver:util:raw:treemap as tm;
 
 type ChannelId = Integer;
 
-nonterminal NANDFlowGraph with pp;
+synthesized attribute softHostInitTrans::Stmt; 
+
+nonterminal NANDFlowGraph with pp, softHostInitTrans;
 
 abstract production nandFlowGraph
-top::NANDFlowGraph ::= gateConfig::NANDGates outputChannels::ChannelIds
+top::NANDFlowGraph ::= gateConfig::NANDGates outputChannels::OutputChannels
 {
-  top.pp =
-    ppConcat([
-      terminate(line(), gateConfig.pps),
-      text("return "), ppImplode(pp", ", outputChannels.pps), semi()]);
+  top.pp = terminate(line(), gateConfig.pps ++ outputChannels.pps);
+  top.softHostInitTrans = seqStmt(gateConfig.softHostInitTrans, outputChannels.softHostInitTrans);
 }
 
-nonterminal NANDGates with pps;
+nonterminal NANDGates with pps, softHostInitTrans;
 
 abstract production consNANDGate
 top::NANDGates ::= h::NANDGate t::NANDGates
 {
   top.pps = h.pp :: t.pps;
+  top.softHostInitTrans = seqStmt(h.softHostInitTrans, t.softHostInitTrans);
 }
 
 abstract production nilNANDGate
 top::NANDGates ::=
 {
   top.pps = [];
+  top.softHostInitTrans = nullStmt();
 }
 
-nonterminal NANDGate with pp;
+nonterminal NANDGate with pp, softHostInitTrans;
 
 abstract production nandGate
 top::NANDGate ::= channel::ChannelId input1::ChannelId input2::ChannelId
 {
   top.pp = pp"${text(toString(channel))} = !(${text(toString(input1))} & ${text(toString(input2))});";
+  top.softHostInitTrans =
+    exprStmt(
+      directCallExpr(
+        name("soft_gate_config", location=builtin),
+        foldExpr(map(mkIntConst(_, builtin), [channel, input1, input2])),
+        location=builtin));
 }
 
-nonterminal ChannelIds with pps;
+nonterminal OutputChannels with pps, softHostInitTrans;
 
-abstract production consChannelId
-top::ChannelIds ::= h::ChannelId t::ChannelIds
+abstract production consOutputChannel
+top::OutputChannels ::= h::OutputChannel t::OutputChannels
 {
-  top.pps = text(toString(h)) :: t.pps;
+  top.pps = h.pp :: t.pps;
+  top.softHostInitTrans = seqStmt(h.softHostInitTrans, t.softHostInitTrans);
 }
 
-abstract production nilChannelId
-top::ChannelIds ::=
+abstract production nilOutputChannel
+top::OutputChannels ::=
 {
   top.pps = [];
+  top.softHostInitTrans = nullStmt();
 }
 
-function nandTranslateFlowGraph
-NANDFlowGraph ::= numInputs::Integer flowGraph::FlowGraph
+nonterminal OutputChannel with pp, softHostInitTrans;
+
+abstract production outputChannel
+top::OutputChannel ::= output::ChannelId channel::ChannelId
 {
-  flowGraph.nextChannelIn = numInputs;
+  top.pp = pp"output ${text(toString(output))} = ${text(toString(channel))};";
+  top.softHostInitTrans =
+    exprStmt(
+      directCallExpr(
+        name("soft_output_config", location=builtin),
+        foldExpr(map(mkIntConst(_, builtin), [output, channel])),
+        location=builtin));
+}
+
+function makeNANDFlowGraph
+NANDFlowGraph ::= gateConfig::[NANDGate] outputChannels::[OutputChannel]
+{
   return
     nandFlowGraph(
-      foldr(consNANDGate, nilNANDGate(), flowGraph.gateConfig),
-      foldr(consChannelId, nilChannelId(), flowGraph.outputChannels));
+      foldr(consNANDGate, nilNANDGate(), gateConfig),
+      foldr(consOutputChannel, nilOutputChannel(), outputChannels));
 }
 
 synthesized attribute gateConfig::[NANDGate] with ++;
 attribute gateConfig occurs on FlowGraph, FlowDefs, FlowDef, FlowExprs, FlowExpr;
-synthesized attribute outputChannel::ChannelId occurs on FlowDef, FlowExpr;
-synthesized attribute outputChannels::[ChannelId] occurs on FlowGraph, FlowExprs;
+synthesized attribute channel::ChannelId occurs on FlowDef, FlowExpr;
+synthesized attribute outputChannels::[OutputChannel] occurs on FlowGraph, FlowExprs;
 
 inherited attribute isNegated::Boolean occurs on FlowExpr;
 autocopy attribute trueChannel::ChannelId occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
@@ -74,7 +97,7 @@ synthesized attribute outputChannelContribs::[Pair<String ChannelId>] occurs on 
 autocopy attribute outputChannelEnv::tm:Map<String ChannelId> occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
 
 inherited attribute nextChannelIn::ChannelId occurs on FlowGraph, FlowDefs, FlowDef, FlowExprs, FlowExpr;
-synthesized attribute nextChannelOut::ChannelId occurs on FlowDefs, FlowDef, FlowExpr;
+synthesized attribute nextChannelOut::ChannelId occurs on FlowGraph, FlowDefs, FlowDef, FlowExprs, FlowExpr;
 
 aspect production flowGraph
 top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
@@ -96,6 +119,7 @@ top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
   
   flowDefs.nextChannelIn = top.nextChannelIn + 3;
   flowExprs.nextChannelIn = flowDefs.nextChannelOut;
+  top.nextChannelOut = flowExprs.nextChannelOut;
 }
 
 aspect production consFlowDef
@@ -125,10 +149,10 @@ aspect production flowDef
 top::FlowDef ::= id::String e::FlowExpr
 {
   top.gateConfig := e.gateConfig;
-  top.outputChannel = e.outputChannel;
+  top.channel = e.channel;
   e.isNegated = false;
   
-  top.outputChannelContribs = [pair(id, e.outputChannel)];
+  top.outputChannelContribs = [pair(id, e.channel)];
   
   e.nextChannelIn = top.nextChannelIn;
   top.nextChannelOut = e.nextChannelOut;
@@ -138,11 +162,12 @@ aspect production consFlowExpr
 top::FlowExprs ::= h::FlowExpr t::FlowExprs
 {
   top.gateConfig := h.gateConfig ++ t.gateConfig;
-  top.outputChannels = h.outputChannel :: t.outputChannels;
+  top.outputChannels = outputChannel(top.position, h.channel) :: t.outputChannels;
   h.isNegated = false;
   
   h.nextChannelIn = top.nextChannelIn;
   t.nextChannelIn = h.nextChannelOut;
+  top.nextChannelOut = t.nextChannelOut;
 }
 
 aspect production nilFlowExpr
@@ -150,13 +175,15 @@ top::FlowExprs ::=
 {
   top.gateConfig := [];
   top.outputChannels = [];
+  
+  top.nextChannelOut = top.nextChannelIn;
 }
 
 aspect production constantFlowExpr
 top::FlowExpr ::= b::Boolean
 {
   top.gateConfig := [];
-  top.outputChannel = if b != top.isNegated then top.trueChannel else top.falseChannel;
+  top.channel = if b != top.isNegated then top.trueChannel else top.falseChannel;
   
   top.nextChannelOut = top.nextChannelIn;
 }
@@ -165,7 +192,7 @@ aspect production parameterFlowExpr
 top::FlowExpr ::= i::Integer
 {
   top.gateConfig := [];
-  top.outputChannel = i;
+  top.channel = i;
   
   top.nextChannelOut = top.nextChannelIn;
 }
@@ -174,7 +201,7 @@ aspect production nodeFlowExpr
 top::FlowExpr ::= id::String
 {
   top.gateConfig := [];
-  top.outputChannel = head(tm:lookup(id, top.outputChannelEnv));
+  top.channel = head(tm:lookup(id, top.outputChannelEnv));
   
   top.nextChannelOut = top.nextChannelIn;
 }
@@ -183,12 +210,12 @@ aspect production andFlowExpr
 top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
   top.gateConfig := e1.gateConfig ++ e2.gateConfig;
-  top.gateConfig <- [nandGate(top.nextChannelIn, e1.outputChannel, e2.outputChannel)];
+  top.gateConfig <- [nandGate(top.nextChannelIn, e1.channel, e2.channel)];
   top.gateConfig <-
     if !top.isNegated
     then [nandGate(top.nextChannelIn + 1, top.nextChannelIn, top.nextChannelIn)]
     else [];
-  top.outputChannel = if top.isNegated then top.nextChannelIn else top.nextChannelIn + 1;
+  top.channel = if top.isNegated then top.nextChannelIn else top.nextChannelIn + 1;
   e1.isNegated = false;
   e2.isNegated = false;
   
@@ -201,12 +228,12 @@ aspect production orFlowExpr
 top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
   top.gateConfig := e1.gateConfig ++ e2.gateConfig;
-  top.gateConfig <- [nandGate(top.nextChannelIn, e1.outputChannel, e2.outputChannel)];
+  top.gateConfig <- [nandGate(top.nextChannelIn, e1.channel, e2.channel)];
   top.gateConfig <-
     if top.isNegated
     then [nandGate(top.nextChannelIn + 1, top.nextChannelIn, top.nextChannelIn)]
     else [];
-  top.outputChannel = if top.isNegated then top.nextChannelIn else top.nextChannelIn + 1;
+  top.channel = if top.isNegated then top.nextChannelIn else top.nextChannelIn + 1;
   e1.isNegated = true;
   e2.isNegated = true;
   
@@ -219,7 +246,7 @@ aspect production notFlowExpr
 top::FlowExpr ::= e::FlowExpr
 {
   top.gateConfig := e.gateConfig;
-  top.outputChannel = e.outputChannel;
+  top.channel = e.channel;
   e.isNegated = !top.isNegated;
   
   e.nextChannelIn = top.nextChannelIn;
