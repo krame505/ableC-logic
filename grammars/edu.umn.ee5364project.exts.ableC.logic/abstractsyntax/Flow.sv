@@ -8,10 +8,10 @@ synthesized attribute flowDefs::[FlowDef];
 synthesized attribute flowExprs::[FlowExpr];
 
 -- Used to build the flowEnv Map
-synthesized attribute flowContribs::[Pair<String Decorated FlowExpr>];
+synthesized attribute flowContribs::[Pair<String Decorated FlowDef>];
 
 -- The flow graph provided to each element of the graph as a Map
-autocopy attribute flowEnv::tm:Map<String Decorated FlowExpr>;
+autocopy attribute flowEnv::tm:Map<String Decorated FlowDef>;
 
 -- Function application
 synthesized attribute appliedFlowDefs::[FlowDef];
@@ -88,7 +88,9 @@ top::FlowDefs ::=
   top.referencedNodes = [];
 }
 
-nonterminal FlowDef with flowEnv, renameFn, arguments, referenceEnv, pp, flowContribs, applied<FlowDef>, simplified<FlowDef>, canCollapse, referencedNodes;
+synthesized attribute flowExpr::Decorated FlowExpr;
+
+nonterminal FlowDef with flowEnv, renameFn, arguments, referenceEnv, pp, name, flowExpr, flowContribs, applied<FlowDef>, simplified<FlowDef>, canCollapse, referencedNodes;
 flowtype FlowDef = decorate {flowEnv, referenceEnv};
 
 abstract production flowDef
@@ -96,9 +98,11 @@ top::FlowDef ::= id::String fe::FlowExpr
 {
   propagate simplified;
   top.pp = pp"${text(id)} = ${fe.pp};";
-  top.flowContribs = [pair(id, fe)];
+  top.name = id;
+  top.flowExpr = fe;
+  top.flowContribs = [pair(id, top)];
   top.applied = flowDef(top.renameFn(id), fe.applied);
-  top.canCollapse = canCollapse(id, fe);
+  top.canCollapse = fe.simplified.isSimple || length(tm:lookup(id, fe.referenceEnv)) <= 1;
   top.referencedNodes = fe.referencedNodes;
 }
 
@@ -160,8 +164,8 @@ top::FlowExpr ::= id::String
   top.pp = text(id);
   top.applied = nodeFlowExpr(top.renameFn(id));
   
-  production refNode::Decorated FlowExpr = head(tm:lookup(id, top.flowEnv));
-  top.simplified = if canCollapse(id, refNode) then refNode.simplified else nodeFlowExpr(id);
+  production refNode::Decorated FlowDef = head(tm:lookup(id, top.flowEnv));
+  top.simplified = if refNode.canCollapse then refNode.flowExpr.simplified else nodeFlowExpr(id);
   top.referencedNodes = [id];
   top.isSimple = true;
 }
@@ -255,13 +259,6 @@ Pair<[FlowDef] [FlowExpr]> ::= logicFunctionEnv::Scopes<LogicFunctionItem> lhs::
 }
 
 -- Utility functions
--- Helper for graph simplification, check if a flow def can be removed
-function canCollapse
-Boolean ::= id::String fe::Decorated FlowExpr
-{
-  return fe.simplified.isSimple || length(tm:lookup(id, fe.referenceEnv)) <= 1;
-}
-
 -- Construct a flow graph from lists of flow defs and flow exprs
 function makeFlowGraph
 FlowGraph ::= name::String flowDefs::[FlowDef] flowExprs::[FlowExpr]
