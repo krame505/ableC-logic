@@ -55,6 +55,8 @@ data_t soft_invoke(data_t val1, data_t val2) {
     result <<= 1;
     result |= data[output_config[i]];
   }
+#ifdef DEBUG
   fprintf(stderr, "Output: %d\n", result);
+#endif
   return result;
 }

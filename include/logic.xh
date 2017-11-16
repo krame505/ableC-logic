@@ -12,8 +12,8 @@ logic unsigned:2 halfAdd(bool a, bool b) {
 
 logic unsigned:2 fullAdd(bool a, bool b, bool c) {
   unsigned:2 upperRes = halfAdd(a, b);
-  unsigned:2 lowerRes = halfAdd(c, upperRes[1]);
-  return upperRes[0] || lowerRes[0], lowerRes[1];
+  unsigned:2 lowerRes = halfAdd(c, upperRes[0]);
+  return upperRes[1] || lowerRes[1], lowerRes[0];
 }
 
 #endif

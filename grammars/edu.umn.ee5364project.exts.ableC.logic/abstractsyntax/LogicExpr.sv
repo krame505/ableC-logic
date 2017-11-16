@@ -121,12 +121,12 @@ top::LogicExpr ::= e::LogicExpr i::Integer
       mkIntConst(1, builtin),
       rshExpr(
         e.logicType.hostToUnsignedProd(e.host, builtin),
-        mkIntConst(e.logicType.width - (i + 1), builtin), location=builtin),
+        mkIntConst(i, builtin), location=builtin),
       location=builtin);
   top.logicType = boolLogicType();
   top.errors := e.errors;
   top.flowDefs = e.flowDefs;
-  top.flowExprs = [head(drop(i, e.flowExprs))];
+  top.flowExprs = [head(drop(e.logicType.width - i - 1, e.flowExprs))];
   
   top.errors <-
     if i < 0 || i >= e.logicType.width
@@ -140,27 +140,27 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
   top.pp = pp"${e.pp}[${text(toString(i))}..${text(toString(j))}]";
   top.host =
     andBitExpr(
-      mkIntConst(bitsToInt(false, repeat(true, j - i + 1)), builtin),
+      mkIntConst(bitsToInt(false, repeat(true, i - j + 1)), builtin),
       rshExpr(
         e.logicType.hostToUnsignedProd(e.host, builtin),
-        mkIntConst(e.logicType.width - (j + 1), builtin), location=builtin),
+        mkIntConst(j, builtin), location=builtin),
       location=builtin);
-  top.logicType = unsignedLogicType(j - i + 1);
+  top.logicType = unsignedLogicType(i - j + 1);
   top.errors := e.errors;
   top.flowDefs = e.flowDefs;
-  top.flowExprs = take(j - i + 1, drop(i, e.flowExprs));
+  top.flowExprs = take(i - j + 1, drop(e.logicType.width - i - 1, e.flowExprs));
   
   top.errors <-
     if i < 0 || i >= e.logicType.width
-    then [err(top.location, s"Out of bounds lower bit index ${toString(i)} for ${show(80, e.logicType.pp)}")]
+    then [err(top.location, s"Out of bounds upper bit index ${toString(i)} for ${show(80, e.logicType.pp)}")]
     else [];
   top.errors <-
     if j < 0 || j >= e.logicType.width
-    then [err(top.location, s"Out of bounds upper bit index ${toString(j)} for ${show(80, e.logicType.pp)}")]
+    then [err(top.location, s"Out of bounds lower bit index ${toString(j)} for ${show(80, e.logicType.pp)}")]
     else [];
   top.errors <-
-    if i > j
-    then [err(top.location, s"Lower bit index ${toString(i)} must be less than upper bit index ${toString(j)}")]
+    if i < j
+    then [err(top.location, s"Upper bit index ${toString(i)} must be greater than lower bit index ${toString(j)}")]
     else [];
 }
 

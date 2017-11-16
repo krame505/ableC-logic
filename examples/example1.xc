@@ -17,21 +17,21 @@ logic signed:17 foo(unsigned:7 a, bool b) {
 }
 
 logic bool bar(unsigned:8 x) {
-  unsigned:4 y = x[0..3] | x[4..7];
-  unsigned:2 z = y[0..1] | y[2..3];
+  unsigned:4 y = x[7..4] | x[3..0];
+  unsigned:2 z = y[3..2] | y[1..0];
   return z[0] | z[1];
 }
 
-logic unsigned:16 lsh(unsigned:16 x) {
-  return x[1..15], false;
+logic unsigned:16 lsh1x(unsigned:16 x) {
+  return x[14..0], false;
 }
 
-logic unsigned:16 rsh(unsigned:16 x) {
-  return false, x[0..14];
+logic unsigned:16 rsh1x(unsigned:16 x) {
+  return false, x[15..1];
 }
 
 logic unsigned:16 lsh3x(unsigned:16 x) {
-  return lsh(lsh(lsh(x)));
+  return lsh1x(lsh1x(lsh1x(x)));
 }
 
 logic unsigned:16 lsh6x(unsigned:16 x) {
@@ -39,23 +39,23 @@ logic unsigned:16 lsh6x(unsigned:16 x) {
 }
 
 logic unsigned:8 bitNot8(unsigned:8 x) {
-  return !x[0], !x[1], !x[2], !x[3], !x[4], !x[5], !x[6], !x[7];
+  return !x[7], !x[6], !x[5], !x[4], !x[3], !x[2], !x[1], !x[0];
 }
 
 logic unsigned:16 bitNot16(unsigned:16 x) {
-  return bitNot8(x[0..7]), bitNot8(x[8..15]);
+  return bitNot8(x[15..8]), bitNot8(x[7..0]);
 }
 
 logic unsigned:16 baz(unsigned:8 x) {
-  return lsh(bitNot8(x));
+  return lsh1x(bitNot8(x));
 }
 
-logic signed:16 arsh(signed:16 x) {
-  return x[0], x[0..14];
+logic signed:16 arsh1x(signed:16 x) {
+  return x[15], x[15..1];
 }
 
 logic signed:16 foo1(signed:16 x) {
-  return x[0..14], !x[15];
+  return x[15..1], !x[0];
 }
 
 logic signed:16 bar1(signed:8 x) {
@@ -117,19 +117,19 @@ int main (int argc, char **argv) {
   uint16_t x = 1;
   printf("0x%x\n", x);
   for (int i = 0; i < 17; i++) {
-    x = lsh(x);
+    x = lsh1x(x);
     printf("0x%x\n", x);
   }
   x = 0x8000;
   printf("0x%x\n", x);
   for (int i = 0; i < 17; i++) {
-    x = rsh(x);
+    x = rsh1x(x);
     printf("0x%x\n", x);
   }
   x = 0x8000;
   printf("0x%x\n", x);
   for (int i = 0; i < 17; i++) {
-    x = arsh(x);
+    x = arsh1x(x);
     printf("0x%x\n", x);
   }
   printf("0x%x\n", lsh6x(0xAAAA));
