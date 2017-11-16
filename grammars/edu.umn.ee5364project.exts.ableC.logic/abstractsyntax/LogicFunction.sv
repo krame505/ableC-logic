@@ -87,10 +87,10 @@ top::Stmt ::= id::Name
   
   id.logicFunctionEnv = top.env.logicFunctions;
   local flowGraph::FlowGraph = id.logicFunctionItem.flowGraph;
-  flowGraph.nextChannelIn = numInputs;
-  
-  local nandFlowGraph::NANDFlowGraph =
-    makeNANDFlowGraph(flowGraph.gateConfig, flowGraph.outputChannels);
+  flowGraph.numInputs = numInputs;
+  flowGraph.numOutputs = numOutputs;
+  local numGatesRequired::Integer = flowGraph.numGatesRequired;
+  local nandFlowGraph::NANDFlowGraph = flowGraph.nandFlowGraph;
   
   local localErrors::[Message] =
     if !null(id.logicFunctionLookupCheck)
@@ -109,8 +109,8 @@ top::Stmt ::= id::Name
       (if id.logicFunctionItem.resultLogicType.width != numOutputs
        then [err(id.location, s"Translation requires invoked logic function result to have width ${toString(numOutputs)} (got ${toString(id.logicFunctionItem.resultLogicType.width)})")]
        else []) ++
-      (if flowGraph.nextChannelOut > numChannels
-       then [err(id.location, s"Insufficient gates available for translation (required ${toString(flowGraph.nextChannelOut - numInputs)}, ${toString(numGates)} available)")]
+      (if numGatesRequired > numGates
+       then [err(id.location, s"Insufficient gates available for translation (required ${toString(numGatesRequired)}, only ${toString(numGates)} available)")]
        else []);
   
   local fwrd::Stmt = nandFlowGraph.softHostInitTrans;

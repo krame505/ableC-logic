@@ -2,6 +2,8 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 nonterminal LogicExpr with logicValueEnv, logicFunctionEnv, pp, host<Expr>, logicType, errors, flowDefs, flowExprs, location;
 
+-- TODO: Everywhere that we bit pad, the host translation needs to reset those bits appropriately
+
 abstract production errorLogicExpr
 top::LogicExpr ::= msg::[Message]
 {

@@ -1,10 +1,11 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
+import core:monad;
 import silver:util:raw:treemap as tm;
 
 type ChannelId = Integer;
 
-synthesized attribute softHostInitTrans::Stmt; 
+synthesized attribute softHostInitTrans::Stmt;
 
 nonterminal NANDFlowGraph with pp, softHostInitTrans;
 
@@ -75,189 +76,194 @@ top::OutputChannel ::= output::ChannelId channel::ChannelId
         location=builtin));
 }
 
-function makeNANDFlowGraph
-NANDFlowGraph ::= gateConfig::[NANDGate] outputChannels::[OutputChannel]
-{
-  return
-    nandFlowGraph(
-      foldr(consNANDGate, nilNANDGate(), gateConfig),
-      foldr(consOutputChannel, nilOutputChannel(), outputChannels));
-}
+inherited attribute numInputs::Integer occurs on FlowGraph;
+inherited attribute numOutputs::Integer occurs on FlowGraph;
+synthesized attribute numGatesRequired::Integer occurs on FlowGraph;
+synthesized attribute nandFlowGraph::NANDFlowGraph occurs on FlowGraph;
 
-synthesized attribute gateConfig::[NANDGate] with ++;
-attribute gateConfig occurs on FlowGraph, FlowDefs, FlowDef, FlowExprs, FlowExpr;
-synthesized attribute channel::ChannelId occurs on FlowDef, FlowExpr;
-synthesized attribute outputChannels::[OutputChannel] occurs on FlowGraph, FlowExprs;
+synthesized attribute channel::ChannelId occurs on FlowExpr;
+synthesized attribute channels::[ChannelId] occurs on FlowExprs;
 
 inherited attribute isNegated::Boolean occurs on FlowExpr;
-autocopy attribute trueChannel::ChannelId occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
-autocopy attribute falseChannel::ChannelId occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
 
-synthesized attribute outputChannelContribs::[Pair<String ChannelId>] occurs on FlowDefs, FlowDef;
-autocopy attribute outputChannelEnv::tm:Map<String ChannelId> occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
+synthesized attribute channelContribs::[Pair<String ChannelId>] occurs on FlowDefs, FlowDef;
+autocopy attribute channelEnv::tm:Map<String ChannelId> occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
 
-inherited attribute nextChannelIn::ChannelId occurs on FlowGraph, FlowDefs, FlowDef, FlowExprs, FlowExpr;
-synthesized attribute nextChannelOut::ChannelId occurs on FlowGraph, FlowDefs, FlowDef, FlowExprs, FlowExpr;
+type ChannelAssignments = Pair<ChannelId tm:Map<ChannelId tm:Map<ChannelId ChannelId>>>; 
+inherited attribute channelAssignmentsIn::ChannelAssignments occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
+synthesized attribute channelAssignmentsOut::ChannelAssignments occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
 
 aspect production flowGraph
 top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
 {
-  top.gateConfig := flowDefs.gateConfig ++ flowExprs.gateConfig;
-  top.outputChannels = flowExprs.outputChannels;
+  flowDefs.channelAssignmentsIn = pair(top.numInputs, tm:empty(compareInteger));
+  flowExprs.channelAssignmentsIn = flowDefs.channelAssignmentsOut;
   
-  top.gateConfig <-
-    [nandGate(top.nextChannelIn, 0, 0),
-     nandGate(top.nextChannelIn + 1, top.nextChannelIn, 0),
-     nandGate(top.nextChannelIn + 2, top.nextChannelIn + 1, top.nextChannelIn + 1)];
-  flowDefs.trueChannel = top.nextChannelIn + 1;
-  flowDefs.falseChannel = top.nextChannelIn + 2;
-  flowExprs.trueChannel = flowDefs.trueChannel;
-  flowExprs.falseChannel = flowDefs.falseChannel;
+  local gateConfig::[NANDGate] =
+    do (bindList, returnList) {
+      entry1::Pair<ChannelId tm:Map<ChannelId ChannelId>> <-
+        tm:toList(flowExprs.channelAssignmentsOut.snd);
+      entry2::Pair<ChannelId ChannelId> <- tm:toList(entry1.snd);
+      return nandGate(entry2.snd, entry1.fst, entry2.fst);
+    };
+  local outputChannels::[OutputChannel] = zipWith(outputChannel, range(0, top.numOutputs), flowExprs.channels);
+  top.nandFlowGraph =
+    nandFlowGraph(
+      foldr(consNANDGate, nilNANDGate(), gateConfig),
+      foldr(consOutputChannel, nilOutputChannel(), outputChannels));
+  top.numGatesRequired = flowExprs.channelAssignmentsOut.fst - top.numInputs;
   
-  flowDefs.outputChannelEnv = tm:empty(compareString);
-  flowExprs.outputChannelEnv = tm:add(flowDefs.outputChannelContribs, flowDefs.outputChannelEnv);
-  
-  flowDefs.nextChannelIn = top.nextChannelIn + 3;
-  flowExprs.nextChannelIn = flowDefs.nextChannelOut;
-  top.nextChannelOut = flowExprs.nextChannelOut;
+  flowDefs.channelEnv = tm:empty(compareString);
+  flowExprs.channelEnv = tm:add(flowDefs.channelContribs, flowDefs.channelEnv);
 }
 
 aspect production consFlowDef
 top::FlowDefs ::= h::FlowDef t::FlowDefs
 {
-  top.gateConfig := h.gateConfig ++ t.gateConfig;
+  top.channelContribs = h.channelContribs ++ t.channelContribs;
+  t.channelEnv = tm:add(h.channelContribs, top.channelEnv);
   
-  top.outputChannelContribs = h.outputChannelContribs ++ t.outputChannelContribs;
-  t.outputChannelEnv = tm:add(h.outputChannelContribs, top.outputChannelEnv);
-  
-  h.nextChannelIn = top.nextChannelIn;
-  t.nextChannelIn = h.nextChannelOut;
-  top.nextChannelOut = t.nextChannelOut;
+  h.channelAssignmentsIn = top.channelAssignmentsIn;
+  t.channelAssignmentsIn = h.channelAssignmentsOut;
+  top.channelAssignmentsOut = t.channelAssignmentsOut;
 }
 
 aspect production nilFlowDef
 top::FlowDefs ::= 
 {
-  top.gateConfig := [];
+  top.channelContribs = [];
   
-  top.outputChannelContribs = [];
-  
-  top.nextChannelOut = top.nextChannelIn;
+  top.channelAssignmentsOut = top.channelAssignmentsIn;
 }
 
 aspect production flowDef
 top::FlowDef ::= id::String e::FlowExpr
 {
-  top.gateConfig := e.gateConfig;
-  top.channel = e.channel;
+  top.channelContribs = [pair(id, e.channel)];
+  
   e.isNegated = false;
   
-  top.outputChannelContribs = [pair(id, e.channel)];
-  
-  e.nextChannelIn = top.nextChannelIn;
-  top.nextChannelOut = e.nextChannelOut;
+  e.channelAssignmentsIn = top.channelAssignmentsIn;
+  top.channelAssignmentsOut = e.channelAssignmentsOut;
 }
 
 aspect production consFlowExpr
 top::FlowExprs ::= h::FlowExpr t::FlowExprs
 {
-  top.gateConfig := h.gateConfig ++ t.gateConfig;
-  top.outputChannels = outputChannel(top.position, h.channel) :: t.outputChannels;
+  top.channels = h.channel :: t.channels;
+  
   h.isNegated = false;
   
-  h.nextChannelIn = top.nextChannelIn;
-  t.nextChannelIn = h.nextChannelOut;
-  top.nextChannelOut = t.nextChannelOut;
+  h.channelAssignmentsIn = top.channelAssignmentsIn;
+  t.channelAssignmentsIn = h.channelAssignmentsOut;
+  top.channelAssignmentsOut = t.channelAssignmentsOut;
 }
 
 aspect production nilFlowExpr
 top::FlowExprs ::= 
 {
-  top.gateConfig := [];
-  top.outputChannels = [];
+  top.channels = [];
   
-  top.nextChannelOut = top.nextChannelIn;
+  top.channelAssignmentsOut = top.channelAssignmentsIn;
 }
 
 aspect production constantFlowExpr
 top::FlowExpr ::= b::Boolean
 {
-  top.gateConfig := [];
-  top.channel = if b != top.isNegated then top.trueChannel else top.falseChannel;
-  
-  top.nextChannelOut = top.nextChannelIn;
+  local gate1::Pair<ChannelId ChannelAssignments> = addGate(0, 0, top.channelAssignmentsIn);
+  local gate2::Pair<ChannelId ChannelAssignments> = addGate(gate1.fst, 0, gate1.snd);
+  local gate3::Pair<ChannelId ChannelAssignments> = addGate(gate2.fst, gate2.fst, gate2.snd);
+  top.channel = if b != top.isNegated then gate2.fst else gate3.fst;
+  top.channelAssignmentsOut = if b != top.isNegated then gate2.snd else gate3.snd;
 }
 
 aspect production parameterFlowExpr
 top::FlowExpr ::= i::Integer
 {
-  top.gateConfig := [];
-  top.gateConfig <-
-    if top.isNegated
-    then [nandGate(top.nextChannelIn, i, i)]
-    else [];
-  top.channel = if top.isNegated then top.nextChannelIn else i;
-  
-  top.nextChannelOut = top.nextChannelIn + if top.isNegated then 1 else 0;
+  local gate1::Pair<ChannelId ChannelAssignments> = addGate(i, i, top.channelAssignmentsIn);
+  top.channel = if top.isNegated then gate1.fst else i;
+  top.channelAssignmentsOut = if top.isNegated then gate1.snd else top.channelAssignmentsIn;
 }
 
 aspect production nodeFlowExpr
 top::FlowExpr ::= id::String
 {
-  top.gateConfig := [];
-  local refChannel::ChannelId = head(tm:lookup(id, top.outputChannelEnv));
-  top.gateConfig <-
-    if top.isNegated
-    then [nandGate(top.nextChannelIn, refChannel, refChannel)]
-    else [];
-  top.channel = if top.isNegated then top.nextChannelIn else refChannel;
-  
-  top.nextChannelOut = top.nextChannelIn + if top.isNegated then 1 else 0;
+  local refChannel::ChannelId = head(tm:lookup(id, top.channelEnv));
+  local gate1::Pair<ChannelId ChannelAssignments> =
+    addGate(refChannel, refChannel, top.channelAssignmentsIn);
+  top.channel = if top.isNegated then gate1.fst else refChannel;
+  top.channelAssignmentsOut = if top.isNegated then gate1.snd else top.channelAssignmentsIn;
 }
 
 aspect production andFlowExpr
 top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
-  top.gateConfig := e1.gateConfig ++ e2.gateConfig;
-  top.gateConfig <- [nandGate(e2.nextChannelOut, e1.channel, e2.channel)];
-  top.gateConfig <-
-    if !top.isNegated
-    then [nandGate(e2.nextChannelOut + 1, e2.nextChannelOut, e2.nextChannelOut)]
-    else [];
-  top.channel = if top.isNegated then e2.nextChannelOut else e2.nextChannelOut + 1;
+  e1.channelAssignmentsIn = top.channelAssignmentsIn;
+  e2.channelAssignmentsIn = e1.channelAssignmentsOut;
+  local gate1::Pair<ChannelId ChannelAssignments> =
+    addGate(e1.channel, e2.channel, e2.channelAssignmentsOut);
+  local gate2::Pair<ChannelId ChannelAssignments> = addGate(gate1.fst, gate1.fst, gate1.snd);
+  top.channel = if top.isNegated then gate1.fst else gate2.fst;
+  top.channelAssignmentsOut = if top.isNegated then gate1.snd else gate2.snd;
+  
   e1.isNegated = false;
   e2.isNegated = false;
-  
-  e1.nextChannelIn = top.nextChannelIn;
-  e2.nextChannelIn = e1.nextChannelOut;
-  top.nextChannelOut = e2.nextChannelOut + if top.isNegated then 1 else 2;
 }
 
 aspect production orFlowExpr
 top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
-  top.gateConfig := e1.gateConfig ++ e2.gateConfig;
-  top.gateConfig <- [nandGate(e2.nextChannelOut, e1.channel, e2.channel)];
-  top.gateConfig <-
-    if top.isNegated
-    then [nandGate(e2.nextChannelOut + 1, e2.nextChannelOut, e2.nextChannelOut)]
-    else [];
-  top.channel = if !top.isNegated then e2.nextChannelOut else e2.nextChannelOut + 1;
+  e1.channelAssignmentsIn = top.channelAssignmentsIn;
+  e2.channelAssignmentsIn = e1.channelAssignmentsOut;
+  local gate1::Pair<ChannelId ChannelAssignments> =
+    addGate(e1.channel, e2.channel, e2.channelAssignmentsOut);
+  local gate2::Pair<ChannelId ChannelAssignments> = addGate(gate1.fst, gate1.fst, gate1.snd);
+  top.channel = if top.isNegated then gate2.fst else gate1.fst;
+  top.channelAssignmentsOut = if top.isNegated then gate2.snd else gate1.snd;
+  
   e1.isNegated = true;
   e2.isNegated = true;
-  
-  e1.nextChannelIn = top.nextChannelIn;
-  e2.nextChannelIn = e1.nextChannelOut;
-  top.nextChannelOut = e2.nextChannelOut + if top.isNegated then 2 else 1;
 }
 
 aspect production notFlowExpr
 top::FlowExpr ::= e::FlowExpr
 {
-  top.gateConfig := e.gateConfig;
+  e.channelAssignmentsIn = top.channelAssignmentsIn;
   top.channel = e.channel;
-  e.isNegated = !top.isNegated;
+  top.channelAssignmentsOut = e.channelAssignmentsOut;
   
-  e.nextChannelIn = top.nextChannelIn;
-  top.nextChannelOut = e.nextChannelOut;
+  e.isNegated = !top.isNegated;
+}
+
+function addGate
+Pair<ChannelId ChannelAssignments> ::= input1::ChannelId input2::ChannelId cas::ChannelAssignments
+{
+  local key1::ChannelId = if input1 < input2 then input1 else input2;
+  local key2::ChannelId = if input1 > input2 then input1 else input2;
+  local nextChannel::ChannelId = cas.fst;
+  return
+    case tm:lookup(key1, cas.snd) of
+      [entry] ->
+        case tm:lookup(key2, entry) of
+        -- Case 1: That gate already exists, return its output channel
+          [output] -> pair(output, cas)
+        -- Case 2: A gate with the same key1 already exists, create the gate and add it to the inner map
+        | [] ->
+          pair(
+            nextChannel,
+            pair(
+              nextChannel + 1,
+              tm:update(key1, [tm:add([pair(key2, nextChannel)], entry)], cas.snd)))
+        end
+    -- Case 3: A gate with the same key1 does not exist, create a new inner map with the new gate
+    | [] ->
+      pair(nextChannel, pair(nextChannel + 1, tm:add([pair(key1, tm:add([pair(key2, nextChannel)], tm:empty(compareInteger)))], cas.snd)))
+    end;
+}
+
+-- TODO: Move to core?
+function compareInteger
+Integer ::= l::Integer  r::Integer
+{
+  return if l <= r then if l == r then 0 else -1 else 1;
 }
