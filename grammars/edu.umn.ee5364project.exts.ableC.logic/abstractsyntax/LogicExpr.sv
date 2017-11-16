@@ -154,7 +154,7 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
     else [];
   top.errors <-
     if j < 0 || j >= e.logicType.width
-    then [err(top.location, s"Out of upper bit index ${toString(j)} for ${show(80, e.logicType.pp)}")]
+    then [err(top.location, s"Out of bounds upper bit index ${toString(j)} for ${show(80, e.logicType.pp)}")]
     else [];
   top.errors <-
     if i > j

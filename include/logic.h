@@ -27,7 +27,8 @@ enum {
   NUM_GATES = 1024,
   NUM_OUTPUTS = 32,
   
-  NUM_CHANNELS = NUM_INPUTS + NUM_GATES
+  NUM_CHANNELS = NUM_INPUTS + NUM_GATES,
+  INPUT_DATA_SIZE = NUM_INPUTS / 2
 };
 
 // Functions used for software NAND translation

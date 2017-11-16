@@ -109,8 +109,8 @@ top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
     [nandGate(top.nextChannelIn, 0, 0),
      nandGate(top.nextChannelIn + 1, top.nextChannelIn, 0),
      nandGate(top.nextChannelIn + 2, top.nextChannelIn + 1, top.nextChannelIn + 1)];
-  flowDefs.trueChannel = top.nextChannelIn + 2;
-  flowDefs.falseChannel = top.nextChannelIn + 1;
+  flowDefs.trueChannel = top.nextChannelIn + 1;
+  flowDefs.falseChannel = top.nextChannelIn + 2;
   flowExprs.trueChannel = flowDefs.trueChannel;
   flowExprs.falseChannel = flowDefs.falseChannel;
   
@@ -192,30 +192,39 @@ aspect production parameterFlowExpr
 top::FlowExpr ::= i::Integer
 {
   top.gateConfig := [];
-  top.channel = i;
+  top.gateConfig <-
+    if top.isNegated
+    then [nandGate(top.nextChannelIn, i, i)]
+    else [];
+  top.channel = if top.isNegated then top.nextChannelIn else i;
   
-  top.nextChannelOut = top.nextChannelIn;
+  top.nextChannelOut = top.nextChannelIn + if top.isNegated then 1 else 0;
 }
 
 aspect production nodeFlowExpr
 top::FlowExpr ::= id::String
 {
   top.gateConfig := [];
-  top.channel = head(tm:lookup(id, top.outputChannelEnv));
+  local refChannel::ChannelId = head(tm:lookup(id, top.outputChannelEnv));
+  top.gateConfig <-
+    if top.isNegated
+    then [nandGate(top.nextChannelIn, refChannel, refChannel)]
+    else [];
+  top.channel = if top.isNegated then top.nextChannelIn else refChannel;
   
-  top.nextChannelOut = top.nextChannelIn;
+  top.nextChannelOut = top.nextChannelIn + if top.isNegated then 1 else 0;
 }
 
 aspect production andFlowExpr
 top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
   top.gateConfig := e1.gateConfig ++ e2.gateConfig;
-  top.gateConfig <- [nandGate(top.nextChannelIn, e1.channel, e2.channel)];
+  top.gateConfig <- [nandGate(e2.nextChannelOut, e1.channel, e2.channel)];
   top.gateConfig <-
     if !top.isNegated
-    then [nandGate(top.nextChannelIn + 1, top.nextChannelIn, top.nextChannelIn)]
+    then [nandGate(e2.nextChannelOut + 1, e2.nextChannelOut, e2.nextChannelOut)]
     else [];
-  top.channel = if top.isNegated then top.nextChannelIn else top.nextChannelIn + 1;
+  top.channel = if top.isNegated then e2.nextChannelOut else e2.nextChannelOut + 1;
   e1.isNegated = false;
   e2.isNegated = false;
   
@@ -228,12 +237,12 @@ aspect production orFlowExpr
 top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
 {
   top.gateConfig := e1.gateConfig ++ e2.gateConfig;
-  top.gateConfig <- [nandGate(top.nextChannelIn, e1.channel, e2.channel)];
+  top.gateConfig <- [nandGate(e2.nextChannelOut, e1.channel, e2.channel)];
   top.gateConfig <-
     if top.isNegated
-    then [nandGate(top.nextChannelIn + 1, top.nextChannelIn, top.nextChannelIn)]
+    then [nandGate(e2.nextChannelOut + 1, e2.nextChannelOut, e2.nextChannelOut)]
     else [];
-  top.channel = if top.isNegated then top.nextChannelIn else top.nextChannelIn + 1;
+  top.channel = if !top.isNegated then e2.nextChannelOut else e2.nextChannelOut + 1;
   e1.isNegated = true;
   e2.isNegated = true;
   

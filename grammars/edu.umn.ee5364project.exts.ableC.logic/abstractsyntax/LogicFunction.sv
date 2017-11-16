@@ -83,6 +83,7 @@ top::Stmt ::= id::Name
     | _ -> error("Failed to look up env value")
     end;
   local numChannels::Integer = numInputs + numGates;
+  local inputDataSize::Integer = numInputs / 2;
   
   id.logicFunctionEnv = top.env.logicFunctions;
   local flowGraph::FlowGraph = id.logicFunctionItem.flowGraph;
@@ -97,10 +98,10 @@ top::Stmt ::= id::Name
     else
       case id.logicFunctionItem.parameterLogicTypes of
         [t1, t2] ->
-          (if t1.width != numInputs / 2
+          (if t1.width != inputDataSize
            then [err(id.location, s"Translation requires invoked logic function parameter 1 to have width ${toString(numInputs / 2)} (got ${toString(t1.width)})")]
            else []) ++
-          (if t2.width != numInputs / 2
+          (if t2.width != inputDataSize
            then [err(id.location, s"Translation requires invoked logic function parameter 2 to have width ${toString(numInputs / 2)} (got ${toString(t2.width)})")]
            else [])
       | a -> [err(id.location, s"Translation requires invoked logic function to have exactly 2 parameters (got ${toString(length(a))})")]
