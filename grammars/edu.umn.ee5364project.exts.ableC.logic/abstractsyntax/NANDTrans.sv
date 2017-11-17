@@ -5,23 +5,55 @@ import silver:util:raw:treemap as tm;
 
 type ChannelId = Integer;
 
+synthesized attribute channelContribs::[Pair<ChannelId ChannelItem>];
+autocopy attribute channelEnv::tm:Map<ChannelId ChannelItem>;
+
+nonterminal ChannelItem with pp, criticalPathLength;
+
+abstract production inputChannelItem
+top::ChannelItem ::= i::ChannelId
+{
+  top.pp = pp"input ${text(toString(i))}";
+  top.criticalPathLength = 0;
+}
+
+abstract production gateChannelItem
+top::ChannelItem ::= g::Decorated NANDGate
+{
+  top.pp = pp"gate ${g.pp}";
+  top.criticalPathLength = g.criticalPathLength;
+}
+
+synthesized attribute numGatesRequired::Integer;
+synthesized attribute criticalPathLength::Integer;
 synthesized attribute softHostInitTrans::Stmt;
 
-nonterminal NANDFlowGraph with pp, softHostInitTrans;
+nonterminal NANDFlowGraph with numInputs, pp, numGatesRequired, criticalPathLength, softHostInitTrans;
 
 abstract production nandFlowGraph
 top::NANDFlowGraph ::= gateConfig::NANDGates outputChannels::OutputChannels
 {
   top.pp = terminate(line(), gateConfig.pps ++ outputChannels.pps);
+  top.numGatesRequired = gateConfig.numGatesRequired;
+  top.criticalPathLength = outputChannels.criticalPathLength;
   top.softHostInitTrans = seqStmt(gateConfig.softHostInitTrans, outputChannels.softHostInitTrans);
+  
+  gateConfig.channelEnv =
+    tm:add(
+      zipWith(pair, range(0, top.numInputs), map(inputChannelItem, range(0, top.numInputs))) ++
+      gateConfig.channelContribs,
+      tm:empty(compareInteger));
+  outputChannels.channelEnv = gateConfig.channelEnv;
 }
 
-nonterminal NANDGates with pps, softHostInitTrans;
+nonterminal NANDGates with channelEnv, pps, channelContribs, numGatesRequired, softHostInitTrans;
 
 abstract production consNANDGate
 top::NANDGates ::= h::NANDGate t::NANDGates
 {
   top.pps = h.pp :: t.pps;
+  top.channelContribs = h.channelContribs ++ t.channelContribs;
+  top.numGatesRequired = 1 + t.numGatesRequired;
   top.softHostInitTrans = seqStmt(h.softHostInitTrans, t.softHostInitTrans);
 }
 
@@ -29,15 +61,21 @@ abstract production nilNANDGate
 top::NANDGates ::=
 {
   top.pps = [];
+  top.channelContribs = [];
+  top.numGatesRequired = 0;
   top.softHostInitTrans = nullStmt();
 }
 
-nonterminal NANDGate with pp, softHostInitTrans;
+nonterminal NANDGate with channelEnv, pp, channelContribs, criticalPathLength, softHostInitTrans;
 
 abstract production nandGate
 top::NANDGate ::= channel::ChannelId input1::ChannelId input2::ChannelId
 {
   top.pp = pp"${text(toString(channel))} = !(${text(toString(input1))} & ${text(toString(input2))});";
+  top.channelContribs = [pair(channel, gateChannelItem(top))];
+  local input1Ref::ChannelItem = head(tm:lookup(input1, top.channelEnv));
+  local input2Ref::ChannelItem = head(tm:lookup(input2, top.channelEnv));
+  top.criticalPathLength = 1 + max(input1Ref.criticalPathLength, input2Ref.criticalPathLength);
   top.softHostInitTrans =
     exprStmt(
       directCallExpr(
@@ -46,12 +84,13 @@ top::NANDGate ::= channel::ChannelId input1::ChannelId input2::ChannelId
         location=builtin));
 }
 
-nonterminal OutputChannels with pps, softHostInitTrans;
+nonterminal OutputChannels with channelEnv, pps, criticalPathLength, softHostInitTrans;
 
 abstract production consOutputChannel
 top::OutputChannels ::= h::OutputChannel t::OutputChannels
 {
   top.pps = h.pp :: t.pps;
+  top.criticalPathLength = max(h.criticalPathLength, t.criticalPathLength);
   top.softHostInitTrans = seqStmt(h.softHostInitTrans, t.softHostInitTrans);
 }
 
@@ -59,15 +98,18 @@ abstract production nilOutputChannel
 top::OutputChannels ::=
 {
   top.pps = [];
+  top.criticalPathLength = 0;
   top.softHostInitTrans = nullStmt();
 }
 
-nonterminal OutputChannel with pp, softHostInitTrans;
+nonterminal OutputChannel with channelEnv, pp, criticalPathLength, softHostInitTrans;
 
 abstract production outputChannel
 top::OutputChannel ::= output::ChannelId channel::ChannelId
 {
   top.pp = pp"output ${text(toString(output))} = ${text(toString(channel))};";
+  local channelRef::ChannelItem = head(tm:lookup(channel, top.channelEnv));
+  top.criticalPathLength = channelRef.criticalPathLength;
   top.softHostInitTrans =
     exprStmt(
       directCallExpr(
@@ -78,16 +120,15 @@ top::OutputChannel ::= output::ChannelId channel::ChannelId
 
 inherited attribute numInputs::Integer occurs on FlowGraph;
 inherited attribute numOutputs::Integer occurs on FlowGraph;
-synthesized attribute numGatesRequired::Integer occurs on FlowGraph;
 synthesized attribute nandFlowGraph::NANDFlowGraph occurs on FlowGraph;
 
-synthesized attribute channel::ChannelId occurs on FlowExpr;
-synthesized attribute channels::[ChannelId] occurs on FlowExprs;
+synthesized attribute transChannelContribs::[Pair<String ChannelId>] occurs on FlowDefs, FlowDef;
+autocopy attribute transChannelEnv::tm:Map<String ChannelId> occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
+
+synthesized attribute transChannel::ChannelId occurs on FlowExpr;
+synthesized attribute transChannels::[ChannelId] occurs on FlowExprs;
 
 inherited attribute isNegated::Boolean occurs on FlowExpr;
-
-synthesized attribute channelContribs::[Pair<String ChannelId>] occurs on FlowDefs, FlowDef;
-autocopy attribute channelEnv::tm:Map<String ChannelId> occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
 
 type ChannelAssignments = Pair<ChannelId tm:Map<ChannelId tm:Map<ChannelId ChannelId>>>; 
 inherited attribute channelAssignmentsIn::ChannelAssignments occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
@@ -106,22 +147,22 @@ top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
       entry2::Pair<ChannelId ChannelId> <- tm:toList(entry1.snd);
       return nandGate(entry2.snd, entry1.fst, entry2.fst);
     };
-  local outputChannels::[OutputChannel] = zipWith(outputChannel, range(0, top.numOutputs), flowExprs.channels);
+  local outputChannels::[OutputChannel] =
+    zipWith(outputChannel, range(0, top.numOutputs), flowExprs.transChannels);
   top.nandFlowGraph =
     nandFlowGraph(
       foldr(consNANDGate, nilNANDGate(), gateConfig),
       foldr(consOutputChannel, nilOutputChannel(), outputChannels));
-  top.numGatesRequired = flowExprs.channelAssignmentsOut.fst - top.numInputs;
   
-  flowDefs.channelEnv = tm:empty(compareString);
-  flowExprs.channelEnv = tm:add(flowDefs.channelContribs, flowDefs.channelEnv);
+  flowDefs.transChannelEnv = tm:empty(compareString);
+  flowExprs.transChannelEnv = tm:add(flowDefs.transChannelContribs, flowDefs.transChannelEnv);
 }
 
 aspect production consFlowDef
 top::FlowDefs ::= h::FlowDef t::FlowDefs
 {
-  top.channelContribs = h.channelContribs ++ t.channelContribs;
-  t.channelEnv = tm:add(h.channelContribs, top.channelEnv);
+  top.transChannelContribs = h.transChannelContribs ++ t.transChannelContribs;
+  t.transChannelEnv = tm:add(h.transChannelContribs, top.transChannelEnv);
   
   h.channelAssignmentsIn = top.channelAssignmentsIn;
   t.channelAssignmentsIn = h.channelAssignmentsOut;
@@ -131,7 +172,7 @@ top::FlowDefs ::= h::FlowDef t::FlowDefs
 aspect production nilFlowDef
 top::FlowDefs ::= 
 {
-  top.channelContribs = [];
+  top.transChannelContribs = [];
   
   top.channelAssignmentsOut = top.channelAssignmentsIn;
 }
@@ -139,7 +180,7 @@ top::FlowDefs ::=
 aspect production flowDef
 top::FlowDef ::= id::String e::FlowExpr
 {
-  top.channelContribs = [pair(id, e.channel)];
+  top.transChannelContribs = [pair(id, e.transChannel)];
   
   e.isNegated = false;
   
@@ -150,7 +191,7 @@ top::FlowDef ::= id::String e::FlowExpr
 aspect production consFlowExpr
 top::FlowExprs ::= h::FlowExpr t::FlowExprs
 {
-  top.channels = h.channel :: t.channels;
+  top.transChannels = h.transChannel :: t.transChannels;
   
   h.isNegated = false;
   
@@ -162,7 +203,7 @@ top::FlowExprs ::= h::FlowExpr t::FlowExprs
 aspect production nilFlowExpr
 top::FlowExprs ::= 
 {
-  top.channels = [];
+  top.transChannels = [];
   
   top.channelAssignmentsOut = top.channelAssignmentsIn;
 }
@@ -173,7 +214,7 @@ top::FlowExpr ::= b::Boolean
   local gate1::Pair<ChannelId ChannelAssignments> = addGate(0, 0, top.channelAssignmentsIn);
   local gate2::Pair<ChannelId ChannelAssignments> = addGate(gate1.fst, 0, gate1.snd);
   local gate3::Pair<ChannelId ChannelAssignments> = addGate(gate2.fst, gate2.fst, gate2.snd);
-  top.channel = if b != top.isNegated then gate2.fst else gate3.fst;
+  top.transChannel = if b != top.isNegated then gate2.fst else gate3.fst;
   top.channelAssignmentsOut = if b != top.isNegated then gate2.snd else gate3.snd;
 }
 
@@ -181,17 +222,17 @@ aspect production parameterFlowExpr
 top::FlowExpr ::= i::Integer
 {
   local gate1::Pair<ChannelId ChannelAssignments> = addGate(i, i, top.channelAssignmentsIn);
-  top.channel = if top.isNegated then gate1.fst else i;
+  top.transChannel = if top.isNegated then gate1.fst else i;
   top.channelAssignmentsOut = if top.isNegated then gate1.snd else top.channelAssignmentsIn;
 }
 
 aspect production nodeFlowExpr
 top::FlowExpr ::= id::String
 {
-  local refChannel::ChannelId = head(tm:lookup(id, top.channelEnv));
+  local refChannel::ChannelId = head(tm:lookup(id, top.transChannelEnv));
   local gate1::Pair<ChannelId ChannelAssignments> =
     addGate(refChannel, refChannel, top.channelAssignmentsIn);
-  top.channel = if top.isNegated then gate1.fst else refChannel;
+  top.transChannel = if top.isNegated then gate1.fst else refChannel;
   top.channelAssignmentsOut = if top.isNegated then gate1.snd else top.channelAssignmentsIn;
 }
 
@@ -201,9 +242,9 @@ top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
   e1.channelAssignmentsIn = top.channelAssignmentsIn;
   e2.channelAssignmentsIn = e1.channelAssignmentsOut;
   local gate1::Pair<ChannelId ChannelAssignments> =
-    addGate(e1.channel, e2.channel, e2.channelAssignmentsOut);
+    addGate(e1.transChannel, e2.transChannel, e2.channelAssignmentsOut);
   local gate2::Pair<ChannelId ChannelAssignments> = addGate(gate1.fst, gate1.fst, gate1.snd);
-  top.channel = if top.isNegated then gate1.fst else gate2.fst;
+  top.transChannel = if top.isNegated then gate1.fst else gate2.fst;
   top.channelAssignmentsOut = if top.isNegated then gate1.snd else gate2.snd;
   
   e1.isNegated = false;
@@ -216,9 +257,9 @@ top::FlowExpr ::= e1::FlowExpr e2::FlowExpr
   e1.channelAssignmentsIn = top.channelAssignmentsIn;
   e2.channelAssignmentsIn = e1.channelAssignmentsOut;
   local gate1::Pair<ChannelId ChannelAssignments> =
-    addGate(e1.channel, e2.channel, e2.channelAssignmentsOut);
+    addGate(e1.transChannel, e2.transChannel, e2.channelAssignmentsOut);
   local gate2::Pair<ChannelId ChannelAssignments> = addGate(gate1.fst, gate1.fst, gate1.snd);
-  top.channel = if top.isNegated then gate2.fst else gate1.fst;
+  top.transChannel = if top.isNegated then gate2.fst else gate1.fst;
   top.channelAssignmentsOut = if top.isNegated then gate2.snd else gate1.snd;
   
   e1.isNegated = true;
@@ -229,7 +270,7 @@ aspect production notFlowExpr
 top::FlowExpr ::= e::FlowExpr
 {
   e.channelAssignmentsIn = top.channelAssignmentsIn;
-  top.channel = e.channel;
+  top.transChannel = e.transChannel;
   top.channelAssignmentsOut = e.channelAssignmentsOut;
   
   e.isNegated = !top.isNegated;
@@ -257,7 +298,11 @@ Pair<ChannelId ChannelAssignments> ::= input1::ChannelId input2::ChannelId cas::
         end
     -- Case 3: A gate with the same key1 does not exist, create a new inner map with the new gate
     | [] ->
-      pair(nextChannel, pair(nextChannel + 1, tm:add([pair(key1, tm:add([pair(key2, nextChannel)], tm:empty(compareInteger)))], cas.snd)))
+      pair(
+        nextChannel,
+        pair(
+          nextChannel + 1,
+          tm:add([pair(key1, tm:add([pair(key2, nextChannel)], tm:empty(compareInteger)))], cas.snd)))
     end;
 }
 

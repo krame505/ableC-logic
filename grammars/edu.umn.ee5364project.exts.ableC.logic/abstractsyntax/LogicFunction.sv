@@ -82,6 +82,11 @@ top::Stmt ::= id::Name
       [enumValueItem(enumItem(_, justExpr(realConstant(integerConstant(val, _, _)))))] -> toInt(val)
     | _ -> error("Failed to look up env value")
     end;
+  local maxCriticalPathLength::Integer =
+    case lookupValue("MAX_CRITICAL_PATH_LENGTH", top.env) of
+      [enumValueItem(enumItem(_, justExpr(realConstant(integerConstant(val, _, _)))))] -> toInt(val)
+    | _ -> error("Failed to look up env value")
+    end;
   local numChannels::Integer = numInputs + numGates;
   local inputDataSize::Integer = numInputs / 2;
   
@@ -89,8 +94,10 @@ top::Stmt ::= id::Name
   local flowGraph::FlowGraph = id.logicFunctionItem.flowGraph;
   flowGraph.numInputs = numInputs;
   flowGraph.numOutputs = numOutputs;
-  local numGatesRequired::Integer = flowGraph.numGatesRequired;
   local nandFlowGraph::NANDFlowGraph = flowGraph.nandFlowGraph;
+  nandFlowGraph.numInputs = numInputs;
+  local numGatesRequired::Integer = nandFlowGraph.numGatesRequired;
+  local criticalPathLength::Integer = nandFlowGraph.criticalPathLength;
   
   local localErrors::[Message] =
     if !null(id.logicFunctionLookupCheck)
@@ -110,7 +117,10 @@ top::Stmt ::= id::Name
        then [err(id.location, s"Translation requires invoked logic function result to have width ${toString(numOutputs)} (got ${toString(id.logicFunctionItem.resultLogicType.width)})")]
        else []) ++
       (if numGatesRequired > numGates
-       then [err(id.location, s"Insufficient gates available for translation (required ${toString(numGatesRequired)}, only ${toString(numGates)} available)")]
+       then [err(id.location, s"Insufficient gates available for translation (required ${toString(numGatesRequired)}, allowed ${toString(numGates)})")]
+       else []) ++
+      (if criticalPathLength > maxCriticalPathLength
+       then [err(id.location, s"Critical path is too long (required ${toString(criticalPathLength)}, allowed ${toString(maxCriticalPathLength)})")]
        else []);
   
   local fwrd::Stmt = nandFlowGraph.softHostInitTrans;
