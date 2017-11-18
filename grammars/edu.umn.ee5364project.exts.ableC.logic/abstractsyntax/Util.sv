@@ -71,12 +71,6 @@ Boolean ::= a::Boolean b::Boolean
   return (a && !b) || (b && !a);
 }
 
-function range
-[Integer] ::= min::Integer max::Integer
-{
-  return if min < max then min :: range(min + 1, max) else [];
-}
-
 function foldBinary1
 a ::= f::(a ::= a a) l::[a]
 {
@@ -88,4 +82,25 @@ a ::= f::(a ::= a a) l::[a]
     in f(foldBinary1(f, take(n, l)), foldBinary1(f, drop(n, l)))
     end
   end;
+}
+
+function range
+[Integer] ::= min::Integer max::Integer
+{
+  return if min < max then min :: range(min + 1, max) else [];
+}
+
+function infiniteRange
+[Integer] ::= min::Integer
+{
+  return min :: infiniteRange(min + 1);
+}
+
+global naturalNumbers::[Integer] = infiniteRange(0);
+
+-- TODO: Move to core?
+function compareInteger
+Integer ::= l::Integer  r::Integer
+{
+  return if l <= r then if l == r then 0 else -1 else 1;
 }

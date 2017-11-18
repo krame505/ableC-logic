@@ -92,8 +92,6 @@ top::Stmt ::= id::Name
   
   id.logicFunctionEnv = top.env.logicFunctions;
   local flowGraph::FlowGraph = id.logicFunctionItem.flowGraph;
-  flowGraph.numInputs = numInputs;
-  flowGraph.numOutputs = numOutputs;
   local nandFlowGraph::NANDFlowGraph = flowGraph.nandFlowGraph;
   nandFlowGraph.numInputs = numInputs;
   local numGatesRequired::Integer = nandFlowGraph.numGatesRequired;
