@@ -14,6 +14,12 @@ top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'call' id::Identifier_t '(' arg
   top.ast = logicFunctionCallExpr(mode.ast, fromId(id), foldExpr(args.ast), location=top.location);
 }
 
+concrete production logicFunctionCallNoArgsExpr_c
+top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'call' id::Identifier_t '(' ')'
+{
+  top.ast = logicFunctionCallExpr(mode.ast, fromId(id), nilExpr(), location=top.location);
+}
+
 concrete production logicFunctionInitStmt_c
 top::BlockItem_c ::= 'logic' mode::LogicMode_c 'init' id::Identifier_t ';'
 {
@@ -24,6 +30,12 @@ concrete production logicFunctionInvokeExpr_c
 top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'invoke' id::Identifier_t '(' args::ArgumentExprList_c ')'
 {
   top.ast = logicFunctionInvokeExpr(mode.ast, fromId(id), foldExpr(args.ast), location=top.location);
+}
+
+concrete production logicFunctionInvokeNoArgsExpr_c
+top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'invoke' id::Identifier_t '(' ')'
+{
+  top.ast = logicFunctionInvokeExpr(mode.ast, fromId(id), nilExpr(), location=top.location);
 }
 
 nonterminal LogicMode_c with ast<LogicMode>;
