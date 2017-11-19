@@ -25,6 +25,7 @@ autocopy attribute renameFn::(String ::= String); -- Renaming function to apply 
 
 -- Graph simplification
 autocopy attribute referenceEnv::tm:Map<String Unit>; -- Map that contains an entry for every time an id is referenced
+synthesized attribute referenceEnvOut::tm:Map<String Unit>; -- referenceEnv passed up the FlowDefs tree
 synthesized attribute simplified<a>::a; -- Collapse together nodes with only one reference, remove unused nodes
 synthesized attribute canCollapse::Boolean; -- True if a def can be removed
 synthesized attribute isSimple::Boolean; -- True if an expression may be duplicated without introducing extra logic
@@ -57,13 +58,10 @@ top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
   
   -- Graph simplification
   flowDefs.referenceEnv =
-    tm:add(
-      map(pair(_, unit()), flowDefs.referencedNodes ++ flowExprs.referencedNodes),
-      tm:empty(compareString));
-  flowExprs.referenceEnv = flowDefs.referenceEnv;
+    tm:add(map(pair(_, unit()), flowExprs.referencedNodes), tm:empty(compareString));
 }
 
-nonterminal FlowDefs with flowEnv, renameFn, arguments, referenceEnv, pps, flowDefs, flowContribs, appliedFlowDefs, simplified<FlowDefs>, referencedNodes;
+nonterminal FlowDefs with flowEnv, renameFn, arguments, referenceEnv, pps, flowDefs, flowContribs, appliedFlowDefs, simplified<FlowDefs>, referenceEnvOut;
 flowtype FlowDefs = decorate {flowEnv, referenceEnv};
 
 abstract production consFlowDef
@@ -74,9 +72,10 @@ top::FlowDefs ::= h::FlowDef t::FlowDefs
   top.flowContribs = h.flowContribs ++ t.flowContribs;
   top.appliedFlowDefs = h.applied :: t.appliedFlowDefs;
   top.simplified = if h.canCollapse then t.simplified else consFlowDef(h.simplified, t.simplified);
-  top.referencedNodes = h.referencedNodes ++ t.referencedNodes;
+  top.referenceEnvOut = tm:add(map(pair(_, unit()), h.referencedNodes), t.referenceEnvOut);
   
   t.flowEnv = tm:add(h.flowContribs, top.flowEnv);
+  h.referenceEnv = t.referenceEnvOut;
 }
 
 abstract production nilFlowDef
@@ -87,7 +86,7 @@ top::FlowDefs ::=
   top.flowDefs = [];
   top.flowContribs = [];
   top.appliedFlowDefs = [];
-  top.referencedNodes = [];
+  top.referenceEnvOut = top.referenceEnv;
 }
 
 synthesized attribute simplifiedFlowExpr::FlowExpr;
@@ -103,14 +102,15 @@ top::FlowDef ::= id::String e::FlowExpr
   top.flowContribs = [pair(id, top)];
   top.applied = flowDef(top.renameFn(id), e.applied);
   top.simplifiedFlowExpr = e.simplified;
-  top.canCollapse = e.simplified.isSimple || length(tm:lookup(id, e.referenceEnv)) <= 1;
-  top.referencedNodes = e.referencedNodes;
+  local numReferences::Integer = length(tm:lookup(id, top.referenceEnv));
+  top.canCollapse = e.simplified.isSimple || numReferences <= 1;
+  top.referencedNodes = if numReferences > 0 then e.referencedNodes else [];
 }
 
 inherited attribute position::Integer; -- Initially 0
 
-nonterminal FlowExprs with position, flowEnv, renameFn, arguments, referenceEnv, pps, flowExprs, appliedFlowExprs, simplified<FlowExprs>, referencedNodes;
-flowtype FlowExprs = decorate {position, flowEnv, referenceEnv};
+nonterminal FlowExprs with position, flowEnv, renameFn, arguments, pps, flowExprs, appliedFlowExprs, simplified<FlowExprs>, referencedNodes;
+flowtype FlowExprs = decorate {position, flowEnv};
 
 abstract production consFlowExpr
 top::FlowExprs ::= h::FlowExpr t::FlowExprs
@@ -134,8 +134,8 @@ top::FlowExprs ::=
   top.referencedNodes = [];
 }
 
-nonterminal FlowExpr with flowEnv, renameFn, arguments, referenceEnv, pp, applied<FlowExpr>, simplified<FlowExpr>, referencedNodes, isSimple;
-flowtype FlowExpr = decorate {flowEnv, referenceEnv};
+nonterminal FlowExpr with flowEnv, renameFn, arguments, pp, applied<FlowExpr>, simplified<FlowExpr>, referencedNodes, isSimple;
+flowtype FlowExpr = decorate {flowEnv};
 
 aspect default production
 top::FlowExpr ::=
@@ -283,4 +283,3 @@ Pair<[FlowDef] [FlowExpr]> ::= flowGraph::FlowGraph arguments::[FlowExpr]
   flowGraph.arguments = arguments;
   return pair(flowGraph.appliedFlowDefs, flowGraph.appliedFlowExprs);
 }
-
