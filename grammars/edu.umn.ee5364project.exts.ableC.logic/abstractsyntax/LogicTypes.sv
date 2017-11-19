@@ -62,12 +62,14 @@ top::LogicTypeExpr ::= msg::[Message]
 synthesized attribute logicTypeExpr::LogicTypeExpr;
 synthesized attribute width::Integer;
 
+inherited attribute otherType::LogicType;
+
 synthesized attribute bitPad::(Pair<[FlowDef] [FlowExpr]> ::= [FlowExpr]);
 
 synthesized attribute hostToUnsignedProd::(Expr ::= Expr Location);
-synthesized attribute hostFromUnsignedProd::(Expr ::= Expr Location);
+synthesized attribute hostCastProd::(Expr ::= Expr Location);
 
-nonterminal LogicType with pp, logicTypeExpr, width, isIntegerType, bitPad, hostToUnsignedProd, hostFromUnsignedProd;
+nonterminal LogicType with otherType, pp, logicTypeExpr, width, isIntegerType, bitPad, hostToUnsignedProd, hostCastProd;
 
 aspect default production
 top::LogicType ::=
@@ -76,7 +78,7 @@ top::LogicType ::=
   top.bitPad =
     \ fes::[FlowExpr] -> pair([], repeat(constantFlowExpr(false), top.width - length(fes)) ++ fes);
   top.hostToUnsignedProd = \ e::Expr l::Location -> e;
-  top.hostFromUnsignedProd = \ e::Expr l::Location -> e;
+  top.hostCastProd = top.hostToUnsignedProd;
 }
 
 abstract production boolLogicType
@@ -100,7 +102,42 @@ top::LogicType ::= width::Integer
         pair(
           [flowDef(tmpFlowId, head(fes))],
           repeat(nodeFlowExpr(tmpFlowId), top.width - length(fes) + 1) ++ tail(fes))
-      end;  
+      end;
+  top.hostToUnsignedProd =
+    explicitCastExpr(
+      typeName(unsignedLogicTypeExpr(width, location=builtin).host, baseTypeExpr()),
+      _, location=_);
+  top.hostCastProd =
+    case top.otherType of
+      signedLogicType(width2) -> \ e::Expr l::Location -> e
+    | _ ->
+      if isHostWidth(width)
+      then
+        \ e::Expr l::Location ->
+          explicitCastExpr(
+            typeName(
+              signedLogicTypeExpr(top.otherType.width, location=builtin).host,
+              baseTypeExpr()),
+            top.otherType.hostToUnsignedProd(e, l),
+            location=l)
+      else
+        \ e::Expr l::Location ->
+          explicitCastExpr(
+            typeName(
+              signedLogicTypeExpr(top.otherType.width, location=builtin).host,
+              baseTypeExpr()),
+            -- Convert to unsigned and sign-extend
+            let
+              mask::Expr =
+                mkIntConst(bitsToInt(false, true :: repeat(false, top.otherType.width - 1)), l)
+            in
+              subExpr(
+                xorExpr(top.otherType.hostToUnsignedProd(e, l), mask, location=l),
+                mask,
+                location=l)
+            end,
+            location=l)
+    end;
 }
 
 abstract production unsignedLogicType
@@ -129,4 +166,17 @@ Type ::= env::Decorated Env  logicType::LogicType
   bty.givenRefId = nothing();
   bty.returnType = nothing();
   return bty.typerep;
+}
+
+function getHostCastProd
+(Expr ::= Expr Location) ::= fromType::LogicType toType::LogicType
+{
+  toType.otherType = fromType;
+  return toType.hostCastProd;
+}
+
+function isHostWidth
+Boolean ::= width::Integer
+{
+  return width == 8 || width == 16 || width == 32 || width == 64;
 }

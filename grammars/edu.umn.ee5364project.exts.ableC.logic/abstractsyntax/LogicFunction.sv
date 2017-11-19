@@ -43,12 +43,17 @@ abstract production logicFunctionCallExpr
 top::Expr ::= mode::LogicMode id::Name args::Exprs
 {
   top.pp = pp"logic ${mode.pp} call ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
-  -- TODO: Check for include of logic.xh
-  forwards to
+  
+  id.logicFunctionEnv = top.env.logicFunctions;
+  
+  local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors;
+  local fwrd::Expr = 
     stmtExpr(
       logicFunctionInitStmt(mode, id),
       logicFunctionInvokeExpr(mode, id, args, location=top.location),
       location=builtin);
+  
+  forwards to mkErrorCheck(localErrors, fwrd);
 }
 
 abstract production logicFunctionInitStmt
@@ -56,7 +61,6 @@ top::Stmt ::= mode::LogicMode id::Name
 {
   top.pp = pp"logic ${mode.pp} init ${id.pp};";
   top.labelDefs := [];
-  -- TODO: Check for include of logic.xh
   forwards to mode.initProd(id);
 }
 
@@ -97,6 +101,7 @@ top::Stmt ::= id::Name
   local numGatesRequired::Integer = nandFlowGraph.numGatesRequired;
   local criticalPathLength::Integer = nandFlowGraph.criticalPathLength;
   
+  -- TODO: Check for include of logic.xh
   local localErrors::[Message] =
     if !null(id.logicFunctionLookupCheck)
     then id.logicFunctionLookupCheck
@@ -130,7 +135,6 @@ abstract production logicFunctionInvokeExpr
 top::Expr ::= mode::LogicMode id::Name args::Exprs
 {
   top.pp = pp"logic ${mode.pp} invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
-  -- TODO: Check for include of logic.xh
   forwards to mode.invokeProd(id, args, top.location);
 }
 
@@ -141,23 +145,54 @@ top::Expr ::= id::Name args::Exprs
   
   id.logicFunctionEnv = top.env.logicFunctions;
   
-  args.expectedTypes = map(logicTypeToHostType(top.env, _), id.logicFunctionItem.parameterLogicTypes);
+  args.expectedLogicTypes = id.logicFunctionItem.parameterLogicTypes;
+  args.expectedTypes =
+    map(logicTypeToHostType(top.env, _), id.logicFunctionItem.parameterLogicTypes);
   args.argumentPosition = 1;
   args.callExpr = top;
   args.callVariadic = false;
   
   local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
-  -- TODO: Replace MSBs with padding bits to the correct width
-  local fwrd::Expr = directCallExpr(getLogicFunctionHostName(id), args, location=top.location);
+  local fwrd::Expr =
+    directCallExpr(getLogicFunctionHostName(id), args.hostInvokeTrans, location=top.location);
   
   forwards to mkErrorCheck(localErrors, fwrd);
+}
+
+attribute expectedLogicTypes occurs on Exprs;
+synthesized attribute hostInvokeTrans::Exprs occurs on Exprs;
+
+aspect production consExpr
+top::Exprs ::= h::Expr t::Exprs
+{
+  top.hostInvokeTrans = consExpr(bitTrimExpr(head(top.expectedLogicTypes).width, h), t);
+  t.expectedLogicTypes = tail(top.expectedLogicTypes);
+}
+
+aspect production nilExpr
+top::Exprs ::=
+{
+  top.hostInvokeTrans = nilExpr();
 }
 
 abstract production softLogicFunctionInvokeExpr
 top::Expr ::= id::Name args::Exprs
 {
   top.pp = pp"logic soft invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
-  forwards to directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
+  
+  id.logicFunctionEnv = top.env.logicFunctions;
+  
+  args.expectedTypes =
+    map(logicTypeToHostType(top.env, _), id.logicFunctionItem.parameterLogicTypes);
+  args.argumentPosition = 1;
+  args.callExpr = top;
+  args.callVariadic = false;
+  
+  local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
+  -- TODO: Check for include of logic.xh
+  local fwrd::Expr = directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
+  
+  forwards to mkErrorCheck(localErrors, fwrd);
 }
 
 synthesized attribute initProd::(Stmt ::= Name);

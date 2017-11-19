@@ -51,10 +51,7 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
             nilAttribute(),
             justInitializer(
               exprInitializer(
-                -- TODO: 2 conversions might be inefficient if the types are the same?
-                typeExpr.logicType.hostFromUnsignedProd(
-                  value.logicType.hostToUnsignedProd(value.host, builtin),
-                  builtin)))),
+                getHostCastProd(value.logicType, typeExpr.logicType)(value.host, builtin)))),
           nilDeclarator())));
   top.logicValueDefs = [pair(id.name, declLogicValueItem(top, id.location))];
   top.logicType = typeExpr.logicType;

@@ -119,9 +119,12 @@ top::LogicExpr ::= e::LogicExpr i::Integer
   top.host =
     andBitExpr(
       mkIntConst(1, builtin),
-      rshExpr(
-        e.logicType.hostToUnsignedProd(e.host, builtin),
-        mkIntConst(i, builtin), location=builtin),
+      if i == 0
+      then e.logicType.hostToUnsignedProd(e.host, builtin)
+      else
+        rshExpr(
+          e.logicType.hostToUnsignedProd(e.host, builtin),
+          mkIntConst(i, builtin), location=builtin),
       location=builtin);
   top.logicType = boolLogicType();
   top.errors := e.errors;
@@ -141,9 +144,12 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
   top.host =
     andBitExpr(
       mkIntConst(bitsToInt(false, repeat(true, i - j + 1)), builtin),
-      rshExpr(
-        e.logicType.hostToUnsignedProd(e.host, builtin),
-        mkIntConst(j, builtin), location=builtin),
+      if j == 0
+      then e.logicType.hostToUnsignedProd(e.host, builtin)
+      else
+        rshExpr(
+          e.logicType.hostToUnsignedProd(e.host, builtin),
+          mkIntConst(j, builtin), location=builtin),
       location=builtin);
   top.logicType = unsignedLogicType(i - j + 1);
   top.errors := e.errors;
@@ -223,7 +229,7 @@ abstract production addLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 {
   top.pp = pp"(${e1.pp} + ${e2.pp})";
-  top.host = addExpr(e1.host, e2.host, location=top.location);
+  top.host = bitTrimExpr(top.logicType.width, addExpr(e1.host, e2.host, location=top.location));
   top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
   top.errors := e1.errors ++ e2.errors;
   local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
@@ -246,7 +252,7 @@ abstract production subLogicExpr
 top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
 {
   top.pp = pp"(${e1.pp} - ${e2.pp})";
-  top.host = subExpr(e1.host, e2.host, location=top.location);
+  top.host = bitTrimExpr(top.logicType.width, subExpr(e1.host, e2.host, location=top.location));
   top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
   top.errors := e1.errors ++ e2.errors;
   local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
@@ -388,12 +394,7 @@ top::LogicExprs ::= h::LogicExpr t::LogicExprs
 {
   top.pps = h.pp :: t.pps;
   top.host =
-    consExpr(
-      -- TODO: 2 conversions might be inefficient if the types are the same?
-      head(top.expectedLogicTypes).hostFromUnsignedProd(
-        h.logicType.hostToUnsignedProd(h.host, builtin),
-        builtin),
-      t.host);
+    consExpr(getHostCastProd(h.logicType, head(top.expectedLogicTypes))(h.host, builtin), t.host);
   top.count = 1 + t.count;
   top.logicTypes = h.logicType :: t.logicTypes;
   top.errors := h.errors ++ t.errors;
@@ -433,4 +434,15 @@ top::LogicExprs ::=
   top.flowExprs = [];
   top.argumentFlowDefs = [];
   top.argumentFlowExprs = [];
+}
+
+-- Helper functions
+-- Trim the C value to what can actually be represented with a logic type
+function bitTrimExpr
+Expr ::= width::Integer e::Expr
+{
+  return
+    if isHostWidth(width)
+    then e
+    else modExpr(e, mkIntConst(bitsToInt(false, repeat(true, width)), builtin), location=builtin);
 }
