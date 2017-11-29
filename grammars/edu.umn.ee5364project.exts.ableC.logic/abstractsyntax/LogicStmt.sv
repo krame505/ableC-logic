@@ -2,12 +2,15 @@ grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 autocopy attribute givenReturnLogicType::LogicType;
 
-nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, host<Stmt>, logicValueDefs, errors, flowDefs, flowExprs;
+synthesized attribute hostPreDecls::Decls;
+
+nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, hostPreDecls, host<Stmt>, logicValueDefs, errors, flowDefs, flowExprs;
 
 abstract production consLogicStmt
 top::LogicStmts ::= h::LogicStmt t::LogicStmts
 {
   top.pps = h.pp :: t.pps;
+  top.hostPreDecls = consDecl(h.hostPreDecl, t.hostPreDecls);
   top.host = seqStmt(h.host, t.host);
   top.logicValueDefs = h.logicValueDefs ++ t.logicValueDefs;
   top.errors := h.errors ++ t.errors;
@@ -21,6 +24,7 @@ abstract production resultLogicStmt
 top::LogicStmts ::= result::LogicExpr
 {
   top.pps = [pp"return ${result.pp};"];
+  top.hostPreDecls = nilDecl();
   top.host = returnStmt(justExpr(result.host));
   top.logicValueDefs = [];
   top.errors := result.errors;
@@ -33,26 +37,27 @@ top::LogicStmts ::= result::LogicExpr
     else [];
 }
 
-nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, host<Stmt>, logicValueDefs, logicType, errors, flowIds, flowDefs;
+synthesized attribute hostPreDecl::Decl;
+
+nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, hostPreDecl, host<Stmt>, logicValueDefs, logicType, errors, flowIds, flowDefs;
 
 abstract production declLogicStmt
 top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
 {
   top.pp = pp"${typeExpr.pp} ${id.pp} = ${value.pp};";
+  top.hostPreDecl =
+    variableDecls(
+      [], nilAttribute(),
+      typeExpr.host,
+      consDeclarator(
+        declarator(id, baseTypeExpr(), nilAttribute(), nothingInitializer()),
+        nilDeclarator()));
   top.host =
-    declStmt( 
-      variableDecls(
-        [], nilAttribute(),
-        typeExpr.host,
-        consDeclarator( 
-          declarator(
-            id,
-            baseTypeExpr(),
-            nilAttribute(),
-            justInitializer(
-              exprInitializer(
-                getHostCastProd(value.logicType, typeExpr.logicType)(value.host, builtin)))),
-          nilDeclarator())));
+    exprStmt(
+      eqExpr(
+        declRefExpr(id, location=builtin),
+        getHostCastProd(value.logicType, typeExpr.logicType)(value.host, builtin),
+        location=builtin));
   top.logicValueDefs = [pair(id.name, declLogicValueItem(top, id.location))];
   top.logicType = typeExpr.logicType;
   top.errors := typeExpr.errors ++ value.errors;

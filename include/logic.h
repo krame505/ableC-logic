@@ -10,7 +10,13 @@
 #endif
 
 // Provide our own definitions for boolean constructs to be used at the program level
+// _Bool was introduced in C99, so use a uint8_t for older versions of C
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
 typedef _Bool bool;
+#else
+typedef uint8_t bool;
+#endif
+
 static const bool true = 1;
 static const bool false = 0;
 

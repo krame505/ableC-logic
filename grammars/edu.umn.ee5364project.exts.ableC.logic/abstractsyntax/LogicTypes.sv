@@ -9,7 +9,7 @@ abstract production boolLogicTypeExpr
 top::LogicTypeExpr ::=
 {
   top.pp = pp"bool";
-  top.host = builtinTypeExpr(nilQualifier(), boolType());
+  top.host = typedefTypeExpr(nilQualifier(), name("bool", location=builtin));
   top.logicType = boolLogicType();
   top.errors := [];
 }

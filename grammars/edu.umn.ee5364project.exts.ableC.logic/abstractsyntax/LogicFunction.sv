@@ -265,7 +265,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       functionTypeExprWithArgs(baseTypeExpr(), params.host, false, nilQualifier()),
       getLogicFunctionHostName(id),
       nilAttribute(), nilDecl(),
-      body.host);
+      seqStmt(declStmt(decls(body.hostPreDecls)), body.host));
   top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
   top.errors := ret.errors ++ params.errors ++ body.errors;
   local bitPad::Pair<[FlowDef] [FlowExpr]> = ret.logicType.bitPad(body.flowExprs);
