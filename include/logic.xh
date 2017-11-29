@@ -4,7 +4,7 @@
 #ifndef _LOGIC_XH
 #define _LOGIC_XH
 
-// Generally useful logic functions
+/* Generally useful logic functions */
 logic unsigned:2 halfAdd(bool a, bool b) {
   return a && b, a ^ b;
 }

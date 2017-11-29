@@ -4,7 +4,7 @@
 #ifndef _LOGIC_SOFT_H
 #define _LOGIC_SOFT_H
 
-// Definitions used for software NAND translation
+/* Definitions used for software NAND translation */
 typedef unsigned channel_t;
 typedef uint32_t data_t;
 
