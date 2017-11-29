@@ -1,5 +1,5 @@
 
-#include <stdint.h>
+#include <logic.h>
 
 #ifndef _LOGIC_SOFT_H
 #define _LOGIC_SOFT_H

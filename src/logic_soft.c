@@ -1,4 +1,4 @@
-#include <logic.h>
+#include <logic_soft.h>
 #include <stdio.h>
 
 //#define DEBUG

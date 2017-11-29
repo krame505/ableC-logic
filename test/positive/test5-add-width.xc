@@ -1,4 +1,5 @@
 #include <logic.xh>
+#include <logic_soft.h>
 
 #include <stdio.h>
 

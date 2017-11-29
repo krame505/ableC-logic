@@ -1,9 +1,6 @@
 
 #include <stdint.h>
 
-#include "logic_soft.h"
-#include "logic_hard.h"
-
 #ifndef _LOGIC_H
 #define _LOGIC_H
 

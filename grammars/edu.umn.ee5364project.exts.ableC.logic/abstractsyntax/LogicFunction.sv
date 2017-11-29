@@ -14,8 +14,7 @@ top::Decl ::= f::LogicFunctionDecl
   
   f.logicFunctionEnv = top.env.logicFunctions;
   
-  -- TODO: Check for include of logic.xh
-  local localErrors::[Message] = f.errors;
+  local localErrors::[Message] = checkLogicXHInclude(f.sourceLocation, top.env) ++ f.errors;
   local hostTrans::Decl = functionDeclaration(f.host);
   local hostErrorTrans::Decl =
     defsDecl([valueDef("_logic_function_" ++ f.name, errorValueItem())]);
@@ -46,7 +45,13 @@ top::Expr ::= mode::LogicMode id::Name args::Exprs
   
   id.logicFunctionEnv = top.env.logicFunctions;
   
-  local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors;
+  -- Decorate and check for errors on the init statment first before forwarding,
+  -- to avoid duplicate errors
+  local initStmt::Stmt = logicFunctionInitStmt(mode, id);
+  initStmt.env = top.env;
+  initStmt.labelEnv = top.labelEnv;
+  initStmt.returnType = top.returnType;
+  local localErrors::[Message] = initStmt.errors;
   local fwrd::Expr = 
     stmtExpr(
       logicFunctionInitStmt(mode, id),
@@ -101,10 +106,11 @@ top::Stmt ::= id::Name
   local numGatesRequired::Integer = nandFlowGraph.numGatesRequired;
   local criticalPathLength::Integer = nandFlowGraph.criticalPathLength;
   
-  -- TODO: Check for include of logic.xh
+  local initialChecks::[Message] =
+    checkLogicSoftHInclude(id.location, top.env) ++ id.logicFunctionLookupCheck;
   local localErrors::[Message] =
-    if !null(id.logicFunctionLookupCheck)
-    then id.logicFunctionLookupCheck
+    if !null(initialChecks)
+    then initialChecks
     else
       case id.logicFunctionItem.parameterLogicTypes of
         [t1, t2] ->
@@ -188,7 +194,9 @@ top::Expr ::= id::Name args::Exprs
   args.callExpr = top;
   args.callVariadic = false;
   
-  local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
+  local localErrors::[Message] =
+    checkLogicSoftHInclude(top.location, top.env) ++
+    id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
   -- TODO: Check for include of logic.xh
   local fwrd::Expr = directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
   
@@ -336,6 +344,24 @@ function getLogicFunctionHostName
 Name ::= id::Name
 {
   return name("_logic_function_" ++ id.name, location=id.location);
+}
+
+function checkLogicXHInclude
+[Message] ::= loc::Location env::Decorated Env
+{
+  return
+    if null(lookupValue("NUM_INPUTS", env))
+    then [err(loc, "Missing include of logic.xh")]
+    else [];
+}
+
+function checkLogicSoftHInclude
+[Message] ::= loc::Location env::Decorated Env
+{
+  return
+    if null(lookupValue("soft_invoke", env))
+    then [err(loc, "Missing include of logic_soft.h")]
+    else [];
 }
 
 global builtin::Location = builtinLoc("logic");
