@@ -30,6 +30,9 @@ override LDFLAGS+=-shared
 
 all: $(SHARED_LIBRARY) $(STATIC_LIBRARY)
 
+dbg: CFLAGS+=-g -DDEBUG
+dbg: all
+
 $(OBJECT_DIR)/%.o: %.c $(INCLUDE_SOURCES) | $(OBJECT_DIR)
 	$(CC) -c $(CPPFLAGS) $(CFLAGS) $< -o $@
 
