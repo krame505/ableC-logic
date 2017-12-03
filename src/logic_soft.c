@@ -1,7 +1,7 @@
+
 #include <logic_soft.h>
 #include <stdio.h>
-
-//#define DEBUG
+#include <stdlib.h>
 
 typedef struct {
   channel_t input1;
@@ -14,10 +14,30 @@ channel_t output_config[NUM_OUTPUTS] = {0};
 #define DATA_HIGH_BIT (1lu << INPUT_DATA_SIZE - 1)
 
 void soft_gate_config(channel_t channel, channel_t input1, channel_t input2) {
+  if (channel > NUM_CHANNELS) {
+    fprintf(stderr, "Fatal error in soft_gate_config: Channel index %u exceeds max number of channels %d\n", channel, NUM_CHANNELS);
+    exit(1);
+  }
+  if (input1 > NUM_CHANNELS) {
+    fprintf(stderr, "Fatal error in soft_gate_config: Input 1 index %u exceeds max number of channels %d\n", input1, NUM_CHANNELS);
+    exit(1);
+  }
+  if (input2 > NUM_CHANNELS) {
+    fprintf(stderr, "Fatal error in soft_gate_config: Input 2 index %u exceeds max number of channels %d\n", input2, NUM_CHANNELS);
+    exit(1);
+  }
   gate_config[channel - NUM_INPUTS] = (gate_t){input1, input2};
 }
 
 void soft_output_config(channel_t output, channel_t channel) {
+  if (output > NUM_OUTPUTS) {
+    fprintf(stderr, "Fatal error in soft_output_config: Output index %u exceeds max number of outputs %d\n", channel, NUM_OUTPUTS);
+    exit(1);
+  }
+  if (channel > NUM_CHANNELS) {
+    fprintf(stderr, "Fatal error in soft_output_config: Channel index %u exceeds max number of channels %d\n", channel, NUM_CHANNELS);
+    exit(1);
+  }
   output_config[output] = channel;
 }
 
