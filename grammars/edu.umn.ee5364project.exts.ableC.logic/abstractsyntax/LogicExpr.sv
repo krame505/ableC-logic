@@ -168,6 +168,13 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
     else [];
 }
 
+abstract production bitSelectRangeFromLogicExpr
+top::LogicExpr ::= e::LogicExpr i::Integer
+{
+  top.pp = pp"${e.pp}[..${text(toString(i))}]";
+  forwards to bitSelectRangeLogicExpr(e, e.logicType.width - 1, i, location=top.location);
+}
+
 -- Built-in C operators
 abstract production bitNotLogicExpr
 top::LogicExpr ::= e::LogicExpr

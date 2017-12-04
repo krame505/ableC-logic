@@ -51,11 +51,11 @@ logic unsigned:16 baz(unsigned:8 x) {
 }
 
 logic signed:16 arsh1x(signed:16 x) {
-  return x[15], x[15..1];
+  return x[15], x[..1];
 }
 
 logic signed:16 foo1(signed:16 x) {
-  return x[15..1], !x[0];
+  return x[..1], !x[0];
 }
 
 logic signed:16 bar1(signed:8 x) {

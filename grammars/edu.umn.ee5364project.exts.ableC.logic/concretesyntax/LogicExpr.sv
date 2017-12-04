@@ -62,6 +62,8 @@ concrete productions top::LogicExpr_c
   { top.ast = bitSelectLogicExpr(e.ast, toInt(i.lexeme), location=top.location); }
 | e::LogicExpr_c MaxPrecLBracket_t i::DecConstant_t '..' j::DecConstant_t ']'
   { top.ast = bitSelectRangeLogicExpr(e.ast, toInt(i.lexeme), toInt(j.lexeme), location=top.location); }
+| e::LogicExpr_c MaxPrecLBracket_t '..' i::DecConstant_t ']'
+  { top.ast = bitSelectRangeFromLogicExpr(e.ast, toInt(i.lexeme), location=top.location); }
 
 | NegateOp_t e::LogicExpr_c
   { top.ast = negateLogicExpr(e.ast, location=top.location); }
