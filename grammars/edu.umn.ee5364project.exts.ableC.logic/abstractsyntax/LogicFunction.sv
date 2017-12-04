@@ -69,10 +69,10 @@ top::Stmt ::= mode::LogicMode id::Name
   forwards to mode.initProd(id);
 }
 
-abstract production softLogicFunctionInitStmt
+abstract production transLogicFunctionInitStmt
 top::Stmt ::= id::Name
 {
-  top.pp = pp"logic soft init ${id.pp};";
+  top.pp = pp"logic trans init ${id.pp};";
   top.labelDefs := [];
   
   -- Look up specification values defined in the header file
@@ -181,10 +181,10 @@ top::Exprs ::=
   top.hostInvokeTrans = nilExpr();
 }
 
-abstract production softLogicFunctionInvokeExpr
+abstract production transLogicFunctionInvokeExpr
 top::Expr ::= id::Name args::Exprs
 {
-  top.pp = pp"logic soft invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
+  top.pp = pp"logic trans invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
   
   id.logicFunctionEnv = top.env.logicFunctions;
   
@@ -197,7 +197,6 @@ top::Expr ::= id::Name args::Exprs
   local localErrors::[Message] =
     checkLogicSoftHInclude(top.location, top.env) ++
     id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
-  -- TODO: Check for include of logic.xh
   local fwrd::Expr = directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
   
   forwards to mkErrorCheck(localErrors, fwrd);
@@ -216,20 +215,12 @@ top::LogicMode ::=
   top.invokeProd = hostLogicFunctionInvokeExpr(_, _, location=_);
 }
 
-abstract production softMode
+abstract production transMode
 top::LogicMode ::= 
 {
-  top.pp = pp"soft";
-  top.initProd = softLogicFunctionInitStmt;
-  top.invokeProd = softLogicFunctionInvokeExpr(_, _, location=_);
-}
-
-abstract production hardMode
-top::LogicMode ::= 
-{
-  top.pp = pp"hard";
-  top.initProd = error("Not yet implemented");
-  top.invokeProd = error("Not yet implemented");
+  top.pp = pp"trans";
+  top.initProd = transLogicFunctionInitStmt;
+  top.invokeProd = transLogicFunctionInvokeExpr(_, _, location=_);
 }
 
 abstract production defaultMode
@@ -237,10 +228,10 @@ top::LogicMode ::=
 {
   top.pp = pp"default";
   forwards to
-    if !null(lookupMisc("--xc-logic-soft", top.env))
-    then softMode()
-    else if !null(lookupMisc("--xc-logic-hard", top.env))
-    then hardMode()
+    if !null(lookupMisc("--xc-logic-host", top.env))
+    then hostMode()
+    else if !null(lookupMisc("--xc-logic-trans", top.env))
+    then transMode()
     else hostMode();
 }
 

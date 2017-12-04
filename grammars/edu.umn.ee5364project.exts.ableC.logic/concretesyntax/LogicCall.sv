@@ -4,9 +4,8 @@ terminal Init_t   'init';
 terminal Invoke_t 'invoke';
 terminal Call_t   'call';
 
-terminal Host_t 'host';
-terminal Soft_t 'soft';
-terminal Hard_t 'hard';
+terminal Host_t  'host';
+terminal Trans_t 'trans';
 
 concrete production logicFunctionCallExpr_c
 top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'call' id::Identifier_t '(' args::ArgumentExprList_c ')'
@@ -43,10 +42,8 @@ nonterminal LogicMode_c with ast<LogicMode>;
 concrete productions top::LogicMode_c
 | 'host'
   { top.ast = hostMode(); }
-| 'soft'
-  { top.ast = softMode(); }
-| 'hard'
-  { top.ast = hardMode(); }
+| 'trans'
+  { top.ast = transMode(); }
 | 'default'
   { top.ast = defaultMode(); }
 | 

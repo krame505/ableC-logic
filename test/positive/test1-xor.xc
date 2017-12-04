@@ -14,7 +14,7 @@ int main() {
   uint32_t result1 = logic host call xor_(a, b);
   printf("result1: %d\n", result1);
   
-  uint32_t result2 = logic soft call xor_(a, b);
+  uint32_t result2 = logic trans call xor_(a, b);
   printf("result2: %d\n", result2);
 
   return result1 != result2;

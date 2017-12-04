@@ -16,7 +16,7 @@ int main() {
   int32_t result1 = logic host call foo(a, b);
   printf("result1: %d\n", result1);
   
-  int32_t result2 = logic soft call foo(a, b);
+  int32_t result2 = logic trans call foo(a, b);
   printf("result2: %d\n", result2);
 
   return result1 != result2;

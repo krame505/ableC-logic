@@ -1,4 +1,5 @@
 //#include <logic.xh>
+//#include <logic_soft.h>
 
 #include <stdio.h>
 
@@ -13,7 +14,7 @@ int main() {
   int result1 = logic host call xor_(a, b);
   printf("result1: %d\n", result1);
   
-  int result2 = logic soft call xor_(a, b);
+  int result2 = logic trans call xor_(a, b);
   printf("result2: %d\n", result2);
 
   return result1 != result2;
