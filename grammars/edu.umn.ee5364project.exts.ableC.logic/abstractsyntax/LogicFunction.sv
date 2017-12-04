@@ -35,7 +35,7 @@ abstract production logicFunctionDirectCallExpr
 top::Expr ::= id::Name args::Exprs
 {
   top.pp = parens( ppConcat([ id.pp, parens( ppImplode( cat( comma(), space() ), args.pps ))]) );
-  forwards to logicFunctionCallExpr(hostMode(), id, args, location=top.location);
+  forwards to logicFunctionCallExpr(hostMode(location=top.location), id, args, location=top.location);
 }
 
 abstract production logicFunctionCallExpr
@@ -45,13 +45,7 @@ top::Expr ::= mode::LogicMode id::Name args::Exprs
   
   id.logicFunctionEnv = top.env.logicFunctions;
   
-  -- Decorate and check for errors on the init statment first before forwarding,
-  -- to avoid duplicate errors
-  local initStmt::Stmt = logicFunctionInitStmt(mode, id);
-  initStmt.env = top.env;
-  initStmt.labelEnv = top.labelEnv;
-  initStmt.returnType = top.returnType;
-  local localErrors::[Message] = initStmt.errors;
+  local localErrors::[Message] = mode.errors;
   local fwrd::Expr = 
     stmtExpr(
       logicFunctionInitStmt(mode, id),
@@ -108,6 +102,13 @@ top::Stmt ::= id::Name
   local numGatesRequired::Integer = nandFlowGraph.numGatesRequired;
   local criticalPathLength::Integer = nandFlowGraph.criticalPathLength;
   
+  local stats::String =
+s"""Translation stats for logic function ${id.name}:
+# of NAND gates used: ${toString(numGatesRequired)}
+Critical path length: ${toString(criticalPathLength)}
+
+""";
+  
   local initialChecks::[Message] =
     checkLogicSoftHInclude(id.location, top.env) ++ id.logicFunctionLookupCheck;
   local localErrors::[Message] =
@@ -136,7 +137,13 @@ top::Stmt ::= id::Name
   
   local fwrd::Stmt = nandFlowGraph.softHostInitTrans;
   
-  forwards to if !null(localErrors) then warnStmt(localErrors) else fwrd;
+  -- Hacky method of printing translation stats if requested from the command line
+  local statsFwrd::Stmt =
+    if !null(lookupMisc("--xc-logic-show-stats", top.env))
+    then unsafeTrace(fwrd, print(stats, unsafeIO()))
+    else fwrd;
+  
+  forwards to if !null(localErrors) then warnStmt(localErrors) else statsFwrd;
 }
 
 abstract production logicFunctionInvokeExpr
@@ -207,12 +214,13 @@ top::Expr ::= id::Name args::Exprs
 synthesized attribute initProd::(Stmt ::= Name);
 synthesized attribute invokeProd::(Expr ::= Name Exprs Location);
 
-nonterminal LogicMode with env, pp, initProd, invokeProd;
+nonterminal LogicMode with env, pp, errors, initProd, invokeProd, location;
 
 abstract production hostMode
 top::LogicMode ::= 
 {
   top.pp = pp"host";
+  top.errors := [];
   top.initProd = \ id::Name -> nullStmt();
   top.invokeProd = hostLogicFunctionInvokeExpr(_, _, location=_);
 }
@@ -221,6 +229,10 @@ abstract production transMode
 top::LogicMode ::= 
 {
   top.pp = pp"trans";
+  top.errors :=
+    if null(lookupMisc("--xc-logic-hard", top.env))
+    then checkLogicSoftHInclude(top.location, top.env)
+    else [];
   top.initProd = transLogicFunctionInitStmt;
   top.invokeProd = transLogicFunctionInvokeExpr(_, _, location=_);
 }
@@ -231,10 +243,10 @@ top::LogicMode ::=
   top.pp = pp"default";
   forwards to
     if !null(lookupMisc("--xc-logic-host", top.env))
-    then hostMode()
+    then hostMode(location=top.location)
     else if !null(lookupMisc("--xc-logic-trans", top.env))
-    then transMode()
-    else hostMode();
+    then transMode(location=top.location)
+    else hostMode(location=top.location); -- Default
 }
 
 synthesized attribute flowGraph::FlowGraph;

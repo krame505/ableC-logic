@@ -37,14 +37,14 @@ top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'invoke' id::Identifier_t '(' '
   top.ast = logicFunctionInvokeExpr(mode.ast, fromId(id), nilExpr(), location=top.location);
 }
 
-nonterminal LogicMode_c with ast<LogicMode>;
+nonterminal LogicMode_c with ast<LogicMode>, location;
 
 concrete productions top::LogicMode_c
 | 'host'
-  { top.ast = hostMode(); }
+  { top.ast = hostMode(location=top.location); }
 | 'trans'
-  { top.ast = transMode(); }
+  { top.ast = transMode(location=top.location); }
 | 'default'
-  { top.ast = defaultMode(); }
+  { top.ast = defaultMode(location=top.location); }
 | 
-  { top.ast = defaultMode(); }
+  { top.ast = defaultMode(location=top.location); }
