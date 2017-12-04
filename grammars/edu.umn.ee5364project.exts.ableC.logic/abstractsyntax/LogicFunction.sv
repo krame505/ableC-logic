@@ -102,7 +102,9 @@ top::Stmt ::= id::Name
   id.logicFunctionEnv = top.env.logicFunctions;
   local flowGraph::FlowGraph = id.logicFunctionItem.flowGraph;
   local nandFlowGraph::NANDFlowGraph = flowGraph.nandFlowGraph;
-  nandFlowGraph.numInputs = numInputs;
+  -- The actual width, not the expected one, so we can generate a translation for error checking
+  -- even if the widths are wrong. 
+  nandFlowGraph.numInputs = sum(map((.width), id.logicFunctionItem.parameterLogicTypes));
   local numGatesRequired::Integer = nandFlowGraph.numGatesRequired;
   local criticalPathLength::Integer = nandFlowGraph.criticalPathLength;
   

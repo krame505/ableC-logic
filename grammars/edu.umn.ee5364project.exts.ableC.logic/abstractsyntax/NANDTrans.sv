@@ -47,10 +47,9 @@ top::NANDFlowGraph ::= gateConfig::NANDGates outputChannels::OutputChannels
   
   gateConfig.channelEnv =
     tm:add(
-      zipWith(
-        pair,
-        map(inputChannelId, naturalNumbers),
-        map(inputChannelItem, range(0, top.numInputs))),
+      map(
+        \ i::Integer -> pair(inputChannelId(i), inputChannelItem(i)),
+        range(0, top.numInputs)),
       tm:empty(compareString));
   outputChannels.channelEnv = tm:add(gateConfig.channelContribs, gateConfig.channelEnv);
   gateConfig.nextChannelIndex = top.numInputs;

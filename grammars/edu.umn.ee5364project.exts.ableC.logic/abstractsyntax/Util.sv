@@ -90,13 +90,7 @@ function range
   return if min < max then min :: range(min + 1, max) else [];
 }
 
-function infiniteRange
-[Integer] ::= min::Integer
-{
-  return min :: infiniteRange(min + 1);
-}
-
-global naturalNumbers::[Integer] = infiniteRange(0);
+global sum::(Integer ::= [Integer]) = foldr(\ i::Integer j::Integer -> i + j, 0, _);
 
 -- TODO: Move to core?
 function compareInteger
