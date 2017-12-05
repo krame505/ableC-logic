@@ -4,6 +4,9 @@
 #ifndef _LOGIC_XH
 #define _LOGIC_XH
 
+/* Dummy item used to check if the header has been included */
+typedef int _logic_xh;
+
 /* Generally useful logic functions */
 logic unsigned:2 halfAdd(bool a, bool b) {
   return a && b, a ^ b;

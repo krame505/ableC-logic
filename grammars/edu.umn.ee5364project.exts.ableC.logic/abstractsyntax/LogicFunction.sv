@@ -117,7 +117,9 @@ Critical path length: ${toString(criticalPathLength)}
 """;
   
   local initialChecks::[Message] =
-    checkLogicSoftHInclude(id.location, top.env) ++ id.logicFunctionLookupCheck;
+    (if !null(lookupMisc("--xc-logic-soft", top.env)) || null(lookupMisc("--xc-logic-hard", top.env))
+     then checkLogicSoftHInclude(id.location, top.env)
+     else checkLogicHInclude(id.location, top.env)) ++ id.logicFunctionLookupCheck;
   local localErrors::[Message] =
     if !null(initialChecks)
     then initialChecks
@@ -219,7 +221,9 @@ top::Expr ::= id::Name args::Exprs
   args.callVariadic = false;
   
   local localErrors::[Message] =
-    checkLogicSoftHInclude(top.location, top.env) ++
+    (if !null(lookupMisc("--xc-logic-soft", top.env)) || null(lookupMisc("--xc-logic-hard", top.env))
+     then checkLogicSoftHInclude(id.location, top.env)
+     else checkLogicHInclude(id.location, top.env)) ++
     id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
   local softFwrd::Expr = directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
   local hardFwrd::Expr =
@@ -384,6 +388,15 @@ Name ::= id::Name
 }
 
 function checkLogicXHInclude
+[Message] ::= loc::Location env::Decorated Env
+{
+  return
+    if null(lookupValue("_logic_xh", env))
+    then [err(loc, "Missing include of logic.xh")]
+    else [];
+}
+
+function checkLogicHInclude
 [Message] ::= loc::Location env::Decorated Env
 {
   return
