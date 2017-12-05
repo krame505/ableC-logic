@@ -119,7 +119,7 @@ top::OutputChannels ::= h::OutputChannel t::OutputChannels
   top.pps = h.pp :: t.pps;
   top.criticalPathLength = max(h.criticalPathLength, t.criticalPathLength);
   top.softHostInitTrans = seqStmt(h.softHostInitTrans, t.softHostInitTrans);
-  top.hardHostInitTrans = seqStmt(h.softHostInitTrans, t.softHostInitTrans);
+  top.hardHostInitTrans = seqStmt(h.hardHostInitTrans, t.hardHostInitTrans);
 }
 
 abstract production nilOutputChannel
