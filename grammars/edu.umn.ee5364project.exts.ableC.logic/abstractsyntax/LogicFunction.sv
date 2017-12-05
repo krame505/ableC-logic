@@ -6,10 +6,13 @@ imports silver:langutil:pp;
 imports edu:umn:cs:melt:ableC:abstractsyntax:host;
 imports edu:umn:cs:melt:ableC:abstractsyntax:env;
 imports edu:umn:cs:melt:ableC:abstractsyntax:construction;
+imports edu:umn:cs:melt:ableC:abstractsyntax:construction:parsing;
+imports edu:umn:cs:melt:ableC:abstractsyntax:substitution;
 
 abstract production logicFunctionDeclaration
 top::Decl ::= f::LogicFunctionDecl
 {
+  propagate substituted;
   top.pp = f.pp;
   
   f.logicFunctionEnv = top.env.logicFunctions;
@@ -34,6 +37,7 @@ top::Decl ::= f::LogicFunctionDecl
 abstract production logicFunctionDirectCallExpr
 top::Expr ::= id::Name args::Exprs
 {
+  propagate substituted;
   top.pp = parens( ppConcat([ id.pp, parens( ppImplode( cat( comma(), space() ), args.pps ))]) );
   forwards to logicFunctionCallExpr(hostMode(location=top.location), id, args, location=top.location);
 }
@@ -41,6 +45,7 @@ top::Expr ::= id::Name args::Exprs
 abstract production logicFunctionCallExpr
 top::Expr ::= mode::LogicMode id::Name args::Exprs
 {
+  propagate substituted;
   top.pp = pp"logic ${mode.pp} call ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
   
   id.logicFunctionEnv = top.env.logicFunctions;
@@ -58,6 +63,7 @@ top::Expr ::= mode::LogicMode id::Name args::Exprs
 abstract production logicFunctionInitStmt
 top::Stmt ::= mode::LogicMode id::Name
 {
+  propagate substituted;
   top.pp = pp"logic ${mode.pp} init ${id.pp};";
   top.labelDefs := [];
   forwards to mode.initProd(id);
@@ -66,6 +72,7 @@ top::Stmt ::= mode::LogicMode id::Name
 abstract production transLogicFunctionInitStmt
 top::Stmt ::= id::Name
 {
+  propagate substituted;
   top.pp = pp"logic trans init ${id.pp};";
   top.labelDefs := [];
   
@@ -135,7 +142,12 @@ Critical path length: ${toString(criticalPathLength)}
        then [err(id.location, s"Critical path is too long (required ${toString(criticalPathLength)}, allowed ${toString(maxCriticalPathLength)})")]
        else []);
   
-  local fwrd::Stmt = nandFlowGraph.softHostInitTrans;
+  local fwrd::Stmt =
+    if !null(lookupMisc("--xc-logic-soft", top.env))
+    then nandFlowGraph.softHostInitTrans
+    else if !null(lookupMisc("--xc-logic-hard", top.env))
+    then nandFlowGraph.hardHostInitTrans
+    else nandFlowGraph.softHostInitTrans;
   
   -- Hacky method of printing translation stats if requested from the command line
   local statsFwrd::Stmt =
@@ -149,6 +161,7 @@ Critical path length: ${toString(criticalPathLength)}
 abstract production logicFunctionInvokeExpr
 top::Expr ::= mode::LogicMode id::Name args::Exprs
 {
+  propagate substituted;
   top.pp = pp"logic ${mode.pp} invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
   forwards to mode.invokeProd(id, args, top.location);
 }
@@ -156,6 +169,7 @@ top::Expr ::= mode::LogicMode id::Name args::Exprs
 abstract production hostLogicFunctionInvokeExpr
 top::Expr ::= id::Name args::Exprs
 {
+  propagate substituted;
   top.pp = pp"logic host invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
   
   id.logicFunctionEnv = top.env.logicFunctions;
@@ -193,6 +207,7 @@ top::Exprs ::=
 abstract production transLogicFunctionInvokeExpr
 top::Expr ::= id::Name args::Exprs
 {
+  propagate substituted;
   top.pp = pp"logic trans invoke ${id.pp}(${ppImplode( cat( comma(), space() ), args.pps )})";
   
   id.logicFunctionEnv = top.env.logicFunctions;
@@ -206,7 +221,24 @@ top::Expr ::= id::Name args::Exprs
   local localErrors::[Message] =
     checkLogicSoftHInclude(top.location, top.env) ++
     id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
-  local fwrd::Expr = directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
+  local softFwrd::Expr = directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
+  local hardFwrd::Expr =
+    substExpr(
+      [declRefSubstitution("__a__", case args of consExpr(h, _) -> h end),
+       declRefSubstitution("__b__", case args of consExpr(_, consExpr(h, _)) -> h end)],
+      parseExpr(s"""
+({proto_typedef int32_t;
+  int32_t _result;
+  asm("lgi %0, %1, %2" : "=r" (_result) : "r" (__a__) , "r" (__b__));
+  _result;})
+"""));
+  
+  local fwrd::Expr =
+    if !null(lookupMisc("--xc-logic-soft", top.env))
+    then softFwrd
+    else if !null(lookupMisc("--xc-logic-hard", top.env))
+    then hardFwrd
+    else softFwrd;
   
   forwards to mkErrorCheck(localErrors, fwrd);
 }
@@ -246,7 +278,7 @@ top::LogicMode ::=
     then hostMode(location=top.location)
     else if !null(lookupMisc("--xc-logic-trans", top.env))
     then transMode(location=top.location)
-    else hostMode(location=top.location); -- Default
+    else hostMode(location=top.location);
 }
 
 synthesized attribute flowGraph::FlowGraph;

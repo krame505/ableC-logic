@@ -34,8 +34,9 @@ inherited attribute numInputs::Integer;
 synthesized attribute numGatesRequired::Integer;
 synthesized attribute criticalPathLength::Integer;
 synthesized attribute softHostInitTrans::Stmt;
+synthesized attribute hardHostInitTrans::Stmt;
 
-nonterminal NANDFlowGraph with numInputs, pp, numGatesRequired, criticalPathLength, softHostInitTrans;
+nonterminal NANDFlowGraph with numInputs, pp, numGatesRequired, criticalPathLength, softHostInitTrans, hardHostInitTrans;
 
 abstract production nandFlowGraph
 top::NANDFlowGraph ::= gateConfig::NANDGates outputChannels::OutputChannels
@@ -44,6 +45,7 @@ top::NANDFlowGraph ::= gateConfig::NANDGates outputChannels::OutputChannels
   top.numGatesRequired = gateConfig.numGatesRequired;
   top.criticalPathLength = outputChannels.criticalPathLength;
   top.softHostInitTrans = seqStmt(gateConfig.softHostInitTrans, outputChannels.softHostInitTrans);
+  top.hardHostInitTrans = seqStmt(gateConfig.hardHostInitTrans, outputChannels.hardHostInitTrans);
   
   gateConfig.channelEnv =
     tm:add(
@@ -57,7 +59,7 @@ top::NANDFlowGraph ::= gateConfig::NANDGates outputChannels::OutputChannels
 
 inherited attribute nextChannelIndex::Integer;
 
-nonterminal NANDGates with channelEnv, nextChannelIndex, pps, channelContribs, numGatesRequired, softHostInitTrans;
+nonterminal NANDGates with channelEnv, nextChannelIndex, pps, channelContribs, numGatesRequired, softHostInitTrans, hardHostInitTrans;
 
 abstract production consNANDGate
 top::NANDGates ::= h::NANDGate t::NANDGates
@@ -66,6 +68,7 @@ top::NANDGates ::= h::NANDGate t::NANDGates
   top.channelContribs = h.channelContribs ++ t.channelContribs;
   top.numGatesRequired = 1 + t.numGatesRequired;
   top.softHostInitTrans = seqStmt(h.softHostInitTrans, t.softHostInitTrans);
+  top.hardHostInitTrans = seqStmt(h.hardHostInitTrans, t.hardHostInitTrans);
   
   t.channelEnv = tm:add(h.channelContribs, top.channelEnv);
   h.nextChannelIndex = top.nextChannelIndex;
@@ -79,11 +82,12 @@ top::NANDGates ::=
   top.channelContribs = [];
   top.numGatesRequired = 0;
   top.softHostInitTrans = nullStmt();
+  top.hardHostInitTrans = nullStmt();
 }
 
 synthesized attribute channelIndex::Integer;
 
-nonterminal NANDGate with channelEnv, nextChannelIndex, pp, channelIndex, channelContribs, criticalPathLength, softHostInitTrans;
+nonterminal NANDGate with channelEnv, nextChannelIndex, pp, channelIndex, channelContribs, criticalPathLength, softHostInitTrans, hardHostInitTrans;
 
 abstract production nandGate
 top::NANDGate ::= channel::ChannelId input1::ChannelId input2::ChannelId
@@ -102,9 +106,12 @@ top::NANDGate ::= channel::ChannelId input1::ChannelId input2::ChannelId
           map(mkIntConst(_, builtin),
           [top.channelIndex, input1Ref.channelIndex, input2Ref.channelIndex])),
         location=builtin));
+  top.hardHostInitTrans = parseStmt(s"""
+asm("lgcg ${toString(top.channelIndex)},${toString(input1Ref.channelIndex)},${toString(input2Ref.channelIndex)}");
+""");
 }
 
-nonterminal OutputChannels with channelEnv, pps, criticalPathLength, softHostInitTrans;
+nonterminal OutputChannels with channelEnv, pps, criticalPathLength, softHostInitTrans, hardHostInitTrans;
 
 abstract production consOutputChannel
 top::OutputChannels ::= h::OutputChannel t::OutputChannels
@@ -112,6 +119,7 @@ top::OutputChannels ::= h::OutputChannel t::OutputChannels
   top.pps = h.pp :: t.pps;
   top.criticalPathLength = max(h.criticalPathLength, t.criticalPathLength);
   top.softHostInitTrans = seqStmt(h.softHostInitTrans, t.softHostInitTrans);
+  top.hardHostInitTrans = seqStmt(h.softHostInitTrans, t.softHostInitTrans);
 }
 
 abstract production nilOutputChannel
@@ -120,9 +128,10 @@ top::OutputChannels ::=
   top.pps = [];
   top.criticalPathLength = 0;
   top.softHostInitTrans = nullStmt();
+  top.hardHostInitTrans = nullStmt();
 }
 
-nonterminal OutputChannel with channelEnv, pp, criticalPathLength, softHostInitTrans;
+nonterminal OutputChannel with channelEnv, pp, criticalPathLength, softHostInitTrans, hardHostInitTrans;
 
 abstract production outputChannel
 top::OutputChannel ::= output::Integer channel::ChannelId
@@ -136,6 +145,9 @@ top::OutputChannel ::= output::Integer channel::ChannelId
         name("soft_output_config", location=builtin),
         foldExpr(map(mkIntConst(_, builtin), [output, channelRef.channelIndex])),
         location=builtin));
+  top.hardHostInitTrans = parseStmt(s"""
+asm("lgco ${toString(output)},${toString(channelRef.channelIndex)}");
+""");
 }
 
 synthesized attribute nandFlowGraph::NANDFlowGraph occurs on FlowGraph;
