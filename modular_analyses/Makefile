@@ -35,3 +35,4 @@ clean:
 	rm -f *~ *.jar *.copperdump.html build.xml
 
 .PHONY: all mda mwda clean
+.NOTPARALLEL: # Avoid running multiple Silver builds in parallel
