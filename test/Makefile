@@ -33,7 +33,7 @@ XC_INCLUDE_DIRS=$(wildcard $(EXTS_BASE)/*/include)
 # All header files that may be included, to be included as dependencies
 XC_INCLUDE_SOURCES=$(foreach dir,$(XC_INCLUDE_DIRS),$(wildcard $(dir)/*.*h))
 # Flags passed to ableC including the appropriate directories
-override XCFLAGS+=$(addprefix -I,$(XC_INCLUDE_DIRS)) --xc-logic-show-stats
+override XCFLAGS+=$(addprefix -I,$(XC_INCLUDE_DIRS)) --xc-logic-output-flow-graphs --xc-logic-show-stats
 # Flags passed to Java when invoking ableC
 override JAVAFLAGS+=-Xss6M
 

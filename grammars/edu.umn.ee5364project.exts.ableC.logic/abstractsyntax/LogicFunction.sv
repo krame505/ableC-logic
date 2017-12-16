@@ -25,7 +25,9 @@ top::Decl ::= f::LogicFunctionDecl
   forwards to
     decls(
       foldDecl([
-        txtDecl(s"/*\n${show(80, f.flowGraph.pp)}\n*/"),
+        if !null(lookupMisc("--xc-logic-output-flow-graphs", top.env))
+        then txtDecl(s"/*\n${show(80, f.flowGraph.pp)}\n*/")
+        else decls(nilDecl()),
         if !null(localErrors) then decls(foldDecl([warnDecl(localErrors), hostErrorTrans])) else hostTrans,
         defsDecl(
           valueDef(f.name, logicFunctionValueItem(top.env, f)) ::
