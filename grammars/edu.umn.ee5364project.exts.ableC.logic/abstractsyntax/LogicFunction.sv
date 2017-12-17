@@ -52,7 +52,7 @@ top::Expr ::= mode::LogicMode id::Name args::Exprs
   
   id.logicFunctionEnv = top.env.logicFunctions;
   
-  local localErrors::[Message] = mode.errors;
+  local localErrors::[Message] = mode.errors ++ id.logicFunctionLookupCheck;
   local fwrd::Expr = 
     stmtExpr(
       logicFunctionInitStmt(mode, id),

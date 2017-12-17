@@ -406,9 +406,9 @@ top::LogicExprs ::= h::LogicExpr t::LogicExprs
   top.argumentErrors =
     case top.expectedLogicTypes of
       lt :: _ ->
-        if h.logicType.width > lt.width
-        then [err(h.location, s"Argument ${toString(top.argumentPosition)} type ${show(80, h.logicType.pp)} is wider than parameter type ${show(80, lt.pp)}")]
-        else t.argumentErrors
+        (if h.logicType.width > lt.width
+         then [err(h.location, s"Argument ${toString(top.argumentPosition)} type ${show(80, h.logicType.pp)} is wider than parameter type ${show(80, lt.pp)}")]
+         else []) ++ t.argumentErrors
     | [] -> [err(top.callLocation, s"Call expected ${toString(top.argumentPosition - 1)} arguments, got ${toString(top.argumentPosition + t.count)}")]
     end;
   top.flowDefs = h.flowDefs ++ t.flowDefs;
