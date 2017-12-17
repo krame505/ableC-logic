@@ -14,15 +14,19 @@ channel_t output_config[NUM_OUTPUTS] = {0};
 #define DATA_HIGH_BIT (1lu << INPUT_DATA_SIZE - 1)
 
 void soft_gate_config(channel_t channel, channel_t input1, channel_t input2) {
-  if (channel > NUM_CHANNELS) {
+  if (channel < NUM_INPUTS) {
+    fprintf(stderr, "Fatal error in soft_gate_config: Channel index %u less than minimum configurable channel %d\n", channel, NUM_INPUTS);
+    exit(1);
+  }
+  if (channel >= NUM_CHANNELS) {
     fprintf(stderr, "Fatal error in soft_gate_config: Channel index %u exceeds max number of channels %d\n", channel, NUM_CHANNELS);
     exit(1);
   }
-  if (input1 > NUM_CHANNELS) {
+  if (input1 >= NUM_CHANNELS) {
     fprintf(stderr, "Fatal error in soft_gate_config: Input 1 index %u exceeds max number of channels %d\n", input1, NUM_CHANNELS);
     exit(1);
   }
-  if (input2 > NUM_CHANNELS) {
+  if (input2 >= NUM_CHANNELS) {
     fprintf(stderr, "Fatal error in soft_gate_config: Input 2 index %u exceeds max number of channels %d\n", input2, NUM_CHANNELS);
     exit(1);
   }
@@ -33,11 +37,15 @@ void soft_gate_config(channel_t channel, channel_t input1, channel_t input2) {
 }
 
 void soft_gate_input_1_config(channel_t channel, channel_t input) {
-  if (channel > NUM_CHANNELS) {
+  if (channel < NUM_INPUTS) {
+    fprintf(stderr, "Fatal error in soft_gate_input_1_config: Channel index %u less than minimum configurable channel %d\n", channel, NUM_INPUTS);
+    exit(1);
+  }
+  if (channel >= NUM_CHANNELS) {
     fprintf(stderr, "Fatal error in soft_gate_input_1_config: Channel index %u exceeds max number of channels %d\n", channel, NUM_CHANNELS);
     exit(1);
   }
-  if (input > NUM_CHANNELS) {
+  if (input >= NUM_CHANNELS) {
     fprintf(stderr, "Fatal error in soft_gate_input_1_config: Input 1 index %u exceeds max number of channels %d\n", input, NUM_CHANNELS);
     exit(1);
   }
@@ -48,11 +56,15 @@ void soft_gate_input_1_config(channel_t channel, channel_t input) {
 }
 
 void soft_gate_input_2_config(channel_t channel, channel_t input) {
-  if (channel > NUM_CHANNELS) {
+  if (channel < NUM_INPUTS) {
+    fprintf(stderr, "Fatal error in soft_gate_input_2_config: Channel index %u less than minimum configurable channel %d\n", channel, NUM_INPUTS);
+    exit(1);
+  }
+  if (channel >= NUM_CHANNELS) {
     fprintf(stderr, "Fatal error in soft_gate_input_2_config: Channel index %u exceeds max number of channels %d\n", channel, NUM_CHANNELS);
     exit(1);
   }
-  if (input > NUM_CHANNELS) {
+  if (input >= NUM_CHANNELS) {
     fprintf(stderr, "Fatal error in soft_gate_input_2_config: Input 2 index %u exceeds max number of channels %d\n", input, NUM_CHANNELS);
     exit(1);
   }
@@ -63,11 +75,11 @@ void soft_gate_input_2_config(channel_t channel, channel_t input) {
 }
 
 void soft_output_config(channel_t output, channel_t channel) {
-  if (output > NUM_OUTPUTS) {
+  if (output >= NUM_OUTPUTS) {
     fprintf(stderr, "Fatal error in soft_output_config: Output index %u exceeds max number of outputs %d\n", channel, NUM_OUTPUTS);
     exit(1);
   }
-  if (channel > NUM_CHANNELS) {
+  if (channel >= NUM_CHANNELS) {
     fprintf(stderr, "Fatal error in soft_output_config: Channel index %u exceeds max number of channels %d\n", channel, NUM_CHANNELS);
     exit(1);
   }
