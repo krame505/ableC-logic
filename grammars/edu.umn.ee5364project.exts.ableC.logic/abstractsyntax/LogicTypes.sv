@@ -109,9 +109,9 @@ top::LogicType ::= width::Integer
       _, location=_);
   top.hostCastProd =
     case top.otherType of
-      signedLogicType(width2) -> \ e::Expr l::Location -> e
+      signedLogicType(_) -> \ e::Expr l::Location -> e
     | _ ->
-      if isHostWidth(width)
+      if isHostWidth(top.otherType.width)
       then
         \ e::Expr l::Location ->
           explicitCastExpr(
@@ -146,6 +146,18 @@ top::LogicType ::= width::Integer
   top.pp = pp"unsigned:${text(toString(width))}";
   top.logicTypeExpr = unsignedLogicTypeExpr(width, location=builtin);
   top.width = width;
+  top.hostCastProd =
+    case top.otherType of
+      unsignedLogicType(_) -> \ e::Expr l::Location -> e
+    | _ ->
+      \ e::Expr l::Location ->
+        explicitCastExpr(
+          typeName(
+            unsignedLogicTypeExpr(top.otherType.width, location=builtin).host,
+            baseTypeExpr()),
+          top.otherType.hostToUnsignedProd(e, l),
+          location=l)
+    end;
 }
 
 abstract production errorLogicType
