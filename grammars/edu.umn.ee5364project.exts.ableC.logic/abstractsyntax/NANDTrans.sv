@@ -107,7 +107,8 @@ top::NANDGate ::= channel::ChannelId input1::ChannelId input2::ChannelId
           [top.channelIndex, input1Ref.channelIndex, input2Ref.channelIndex])),
         location=builtin));
   top.hardHostInitTrans = parseStmt(s"""
-asm("lgcg ${toString(top.channelIndex)},${toString(input1Ref.channelIndex)},${toString(input2Ref.channelIndex)}");
+asm("lgcg1 ${toString(top.channelIndex)},${toString(input1Ref.channelIndex)}");
+asm("lgcg2 ${toString(top.channelIndex)},${toString(input2Ref.channelIndex)}");
 """);
 }
 
