@@ -32,6 +32,36 @@ void soft_gate_config(channel_t channel, channel_t input1, channel_t input2) {
   gate_config[channel - NUM_INPUTS] = (gate_t){input1, input2};
 }
 
+void soft_gate_input_1_config(channel_t channel, channel_t input) {
+  if (channel > NUM_CHANNELS) {
+    fprintf(stderr, "Fatal error in soft_gate_input_1_config: Channel index %u exceeds max number of channels %d\n", channel, NUM_CHANNELS);
+    exit(1);
+  }
+  if (input > NUM_CHANNELS) {
+    fprintf(stderr, "Fatal error in soft_gate_input_1_config: Input 1 index %u exceeds max number of channels %d\n", input, NUM_CHANNELS);
+    exit(1);
+  }
+#ifdef DEBUG
+  fprintf(stderr, "[%4u] := [%4u] NAND _\n", channel, input);
+#endif
+  gate_config[channel - NUM_INPUTS].input1 = input;
+}
+
+void soft_gate_input_2_config(channel_t channel, channel_t input) {
+  if (channel > NUM_CHANNELS) {
+    fprintf(stderr, "Fatal error in soft_gate_input_2_config: Channel index %u exceeds max number of channels %d\n", channel, NUM_CHANNELS);
+    exit(1);
+  }
+  if (input > NUM_CHANNELS) {
+    fprintf(stderr, "Fatal error in soft_gate_input_2_config: Input 2 index %u exceeds max number of channels %d\n", input, NUM_CHANNELS);
+    exit(1);
+  }
+#ifdef DEBUG
+  fprintf(stderr, "[%4u] := _ NAND [%4u]\n", channel, input);
+#endif
+  gate_config[channel - NUM_INPUTS].input2 = input;
+}
+
 void soft_output_config(channel_t output, channel_t channel) {
   if (output > NUM_OUTPUTS) {
     fprintf(stderr, "Fatal error in soft_output_config: Output index %u exceeds max number of outputs %d\n", channel, NUM_OUTPUTS);
