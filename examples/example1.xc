@@ -111,6 +111,10 @@ logic signed:16 foo6() {
   return 1 + 2 + (-3 - 4) + 5 + -y + 7;
 }
 
+logic signed:8 condTest(unsigned:4 v) {
+  return v[0]? 1 : v[1]? 2 : 3;
+}
+
 int main (int argc, char **argv) {
 
   printf("0x%x\n", foo(12, true));
@@ -154,6 +158,10 @@ int main (int argc, char **argv) {
   printf("%d\n", nested(2));
 
   printf("%d\n", addTest(2, 3));
+
+  printf("%d\n", condTest(1));
+  printf("%d\n", condTest(2));
+  printf("%d\n", condTest(4));
   
   return 0; 
 }

@@ -4,7 +4,7 @@ autocopy attribute givenReturnLogicType::LogicType;
 
 synthesized attribute hostPreDecls::Decls;
 
-nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, hostPreDecls, host<Stmt>, logicValueDefs, errors, flowDefs, flowExprs;
+nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, hostPreDecls, host<Stmt>, logicValueDefs, errors, hasFlowGraph, flowDefs, flowExprs;
 
 abstract production consLogicStmt
 top::LogicStmts ::= h::LogicStmt t::LogicStmts
@@ -14,6 +14,7 @@ top::LogicStmts ::= h::LogicStmt t::LogicStmts
   top.host = seqStmt(h.host, t.host);
   top.logicValueDefs = h.logicValueDefs ++ t.logicValueDefs;
   top.errors := h.errors ++ t.errors;
+  top.hasFlowGraph = h.hasFlowGraph && t.hasFlowGraph;
   top.flowDefs = h.flowDefs ++ t.flowDefs;
   top.flowExprs = t.flowExprs;
   
@@ -28,6 +29,7 @@ top::LogicStmts ::= result::LogicExpr
   top.host = returnStmt(justExpr(result.host));
   top.logicValueDefs = [];
   top.errors := result.errors;
+  top.hasFlowGraph = null(top.errors) && result.hasFlowGraph;
   top.flowDefs = result.flowDefs;
   top.flowExprs = result.flowExprs;
   
@@ -39,7 +41,7 @@ top::LogicStmts ::= result::LogicExpr
 
 synthesized attribute hostPreDecl::Decl;
 
-nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, hostPreDecl, host<Stmt>, logicValueDefs, logicType, errors, flowIds, flowDefs;
+nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, hostPreDecl, host<Stmt>, logicValueDefs, logicType, hasFlowGraph, errors, flowIds, flowDefs;
 
 abstract production declLogicStmt
 top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
@@ -60,6 +62,7 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
         location=builtin));
   top.logicValueDefs = [pair(id.name, declLogicValueItem(top, id.location))];
   top.logicType = typeExpr.logicType;
+  top.hasFlowGraph = null(top.errors) && value.hasFlowGraph;
   top.errors := typeExpr.errors ++ value.errors;
   top.flowIds =
     map(

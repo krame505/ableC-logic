@@ -122,29 +122,35 @@ Critical path length: ${toString(criticalPathLength)}
     (if !null(lookupMisc("--xc-logic-soft", top.env)) || null(lookupMisc("--xc-logic-hard", top.env))
      then checkLogicSoftHInclude(id.location, top.env)
      else checkLogicHInclude(id.location, top.env)) ++ id.logicFunctionLookupCheck;
+  local semanticErrors::[Message] =
+    case id.logicFunctionItem.parameterLogicTypes of
+      [t1, t2] ->
+        (if t1.width != inputDataSize
+         then [err(id.location, s"Translation requires invoked logic function parameter 1 to have width ${toString(numInputs / 2)} (got ${toString(t1.width)})")]
+         else []) ++
+        (if t2.width != inputDataSize
+         then [err(id.location, s"Translation requires invoked logic function parameter 2 to have width ${toString(numInputs / 2)} (got ${toString(t2.width)})")]
+         else [])
+    | a -> [err(id.location, s"Translation requires invoked logic function to have exactly 2 parameters (got ${toString(length(a))})")]
+    end ++
+    (if id.logicFunctionItem.resultLogicType.width != numOutputs
+     then [err(id.location, s"Translation requires invoked logic function result to have width ${toString(numOutputs)} (got ${toString(id.logicFunctionItem.resultLogicType.width)})")]
+     else []);
+  local translationErrors::[Message] =
+    (if numGatesRequired > numGates
+     then [err(id.location, s"Insufficient gates available for translation (required ${toString(numGatesRequired)}, allowed ${toString(numGates)})")]
+     else []) ++
+    (if criticalPathLength > maxCriticalPathLength
+     then [err(id.location, s"Critical path is too long (required ${toString(criticalPathLength)}, allowed ${toString(maxCriticalPathLength)})")]
+     else []);
   local localErrors::[Message] =
     if !null(initialChecks)
     then initialChecks
-    else
-      case id.logicFunctionItem.parameterLogicTypes of
-        [t1, t2] ->
-          (if t1.width != inputDataSize
-           then [err(id.location, s"Translation requires invoked logic function parameter 1 to have width ${toString(numInputs / 2)} (got ${toString(t1.width)})")]
-           else []) ++
-          (if t2.width != inputDataSize
-           then [err(id.location, s"Translation requires invoked logic function parameter 2 to have width ${toString(numInputs / 2)} (got ${toString(t2.width)})")]
-           else [])
-      | a -> [err(id.location, s"Translation requires invoked logic function to have exactly 2 parameters (got ${toString(length(a))})")]
-      end ++
-      (if id.logicFunctionItem.resultLogicType.width != numOutputs
-       then [err(id.location, s"Translation requires invoked logic function result to have width ${toString(numOutputs)} (got ${toString(id.logicFunctionItem.resultLogicType.width)})")]
-       else []) ++
-      (if numGatesRequired > numGates
-       then [err(id.location, s"Insufficient gates available for translation (required ${toString(numGatesRequired)}, allowed ${toString(numGates)})")]
-       else []) ++
-      (if criticalPathLength > maxCriticalPathLength
-       then [err(id.location, s"Critical path is too long (required ${toString(criticalPathLength)}, allowed ${toString(maxCriticalPathLength)})")]
-       else []);
+    else if !null(semanticErrors)
+    then semanticErrors
+    else if id.logicFunctionItem.hasFlowGraph
+    then translationErrors
+    else [];
   
   local fwrd::Stmt =
     if !null(lookupMisc("--xc-logic-soft", top.env))
@@ -159,7 +165,10 @@ Critical path length: ${toString(criticalPathLength)}
     then unsafeTrace(fwrd, print(stats, unsafeIO()))
     else fwrd;
   
-  forwards to if !null(localErrors) then warnStmt(localErrors) else statsFwrd;
+  forwards to
+    if !null(localErrors) || !id.logicFunctionItem.hasFlowGraph
+    then warnStmt(localErrors)
+    else statsFwrd;
 }
 
 abstract production logicFunctionInvokeExpr
@@ -226,7 +235,10 @@ top::Expr ::= id::Name args::Exprs
     (if !null(lookupMisc("--xc-logic-soft", top.env)) || null(lookupMisc("--xc-logic-hard", top.env))
      then checkLogicSoftHInclude(id.location, top.env)
      else checkLogicHInclude(id.location, top.env)) ++
-    id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
+    id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors ++
+    (if args.count != 2
+     then [err(top.location, s"Translation requires invoked logic function to have exactly 2 arguments (got ${toString(args.count)})")]
+     else []);
   local softFwrd::Expr = directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
   local hardFwrd::Expr =
     substExpr(
@@ -287,11 +299,12 @@ top::LogicMode ::=
     else hostMode(location=top.location);
 }
 
+synthesized attribute hasFlowGraph::Boolean;
 synthesized attribute flowGraph::FlowGraph;
 synthesized attribute parameterLogicTypes::[LogicType];
 synthesized attribute resultLogicType::LogicType;
 
-nonterminal LogicFunctionDecl with logicFunctionEnv, isTopLevel, pp, host<FunctionDecl>, logicFunctionDefs, errors, flowGraph, name, parameterLogicTypes, resultLogicType, sourceLocation;
+nonterminal LogicFunctionDecl with logicFunctionEnv, isTopLevel, pp, host<FunctionDecl>, logicFunctionDefs, errors, hasFlowGraph, flowGraph, name, parameterLogicTypes, resultLogicType, sourceLocation;
 
 abstract production logicFunctionDecl
 top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters body::LogicStmts
@@ -311,6 +324,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
       seqStmt(declStmt(decls(body.hostPreDecls)), body.host));
   top.logicFunctionDefs = [pair(id.name, logicFunctionItem(top))];
   top.errors := ret.errors ++ params.errors ++ body.errors;
+  top.hasFlowGraph = null(top.errors) && params.hasFlowGraph && body.hasFlowGraph;
   local bitPad::Pair<[FlowDef] [FlowExpr]> = ret.logicType.bitPad(body.flowExprs);
   top.flowGraph =
     makeFlowGraph(id.name, params.flowDefs ++ body.flowDefs ++ bitPad.fst, bitPad.snd).simplified;
@@ -331,7 +345,7 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters b
 
 inherited attribute bitIndex::Integer; -- Initially 0
 
-nonterminal LogicParameters with logicValueEnv, bitIndex, pps, host<Parameters>, logicTypes, logicValueDefs, errors, flowDefs;
+nonterminal LogicParameters with logicValueEnv, bitIndex, pps, host<Parameters>, logicTypes, logicValueDefs, errors, hasFlowGraph, flowDefs;
 
 abstract production consLogicParameter
 top::LogicParameters ::= h::LogicParameter  t::LogicParameters
@@ -341,6 +355,7 @@ top::LogicParameters ::= h::LogicParameter  t::LogicParameters
   top.logicTypes = h.logicType :: t.logicTypes;
   top.logicValueDefs = h.logicValueDefs ++ t.logicValueDefs;
   top.errors := h.errors ++ t.errors;
+  top.hasFlowGraph = h.hasFlowGraph && t.hasFlowGraph;
   top.flowDefs = h.flowDefs ++ t.flowDefs;
   
   t.logicValueEnv = addScope(h.logicValueDefs, h.logicValueEnv);
@@ -355,11 +370,12 @@ top::LogicParameters ::=
   top.host = nilParameters();
   top.logicTypes = [];
   top.logicValueDefs = [];
+  top.hasFlowGraph = true;
   top.errors := [];
   top.flowDefs = [];
 }
 
-nonterminal LogicParameter with logicValueEnv, bitIndex, pp, name, host<ParameterDecl>, logicType, logicValueDefs, errors, flowIds, flowDefs;
+nonterminal LogicParameter with logicValueEnv, bitIndex, pp, name, host<ParameterDecl>, logicType, logicValueDefs, errors, hasFlowGraph, flowIds, flowDefs;
 
 abstract production logicParameter
 top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
@@ -370,6 +386,7 @@ top::LogicParameter ::= typeExpr::LogicTypeExpr id::Name
   top.logicType = typeExpr.logicType;
   top.logicValueDefs = [pair(id.name, parameterLogicValueItem(top, id.location))];
   top.errors := typeExpr.errors;
+  top.hasFlowGraph = null(top.errors);
   top.flowIds =
     map(
       \ i::Integer -> s"${id.name}${toString(i)}_${toString(genInt())}",

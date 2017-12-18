@@ -1,6 +1,6 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
-nonterminal LogicExpr with logicValueEnv, logicFunctionEnv, pp, host<Expr>, logicType, errors, flowDefs, flowExprs, location;
+nonterminal LogicExpr with logicValueEnv, logicFunctionEnv, pp, host<Expr>, logicType, errors, hasFlowGraph, flowDefs, flowExprs, location;
 
 abstract production errorLogicExpr
 top::LogicExpr ::= msg::[Message]
@@ -9,6 +9,7 @@ top::LogicExpr ::= msg::[Message]
   top.host = errorExpr(msg, location=top.location);
   top.logicType = errorLogicType();
   top.errors := msg;
+  top.hasFlowGraph = false;
   top.flowDefs = [];
   top.flowExprs = error("Can't compute flow on tree with errors");
 }
@@ -28,6 +29,7 @@ top::LogicExpr ::= value::Boolean
       location=top.location);
   top.logicType = boolLogicType();
   top.errors := [];
+  top.hasFlowGraph = true;
   top.flowDefs = [];
   top.flowExprs = [constantFlowExpr(value)];
 }
@@ -48,6 +50,7 @@ top::LogicExpr ::= signed::Boolean value::Integer
   local bits::[Boolean] = intToBits(signed, value);
   top.logicType = if signed then signedLogicType(length(bits)) else unsignedLogicType(length(bits));
   top.errors := [];
+  top.hasFlowGraph = true;
   top.flowDefs = [];
   top.flowExprs = map(constantFlowExpr, bits);
 }
@@ -59,6 +62,7 @@ top::LogicExpr ::= id::Name
   top.host = declRefExpr(id, location=top.location);
   top.logicType = id.logicValueItem.logicType;
   top.errors := [];
+  top.hasFlowGraph = null(top.errors);
   top.flowDefs = [];
   top.flowExprs =
     map(\ id::String -> nodeFlowExpr(id), id.logicValueItem.flowIds);
@@ -73,6 +77,7 @@ top::LogicExpr ::= f::Name a::LogicExprs
   top.host = directCallExpr(getLogicFunctionHostName(f), a.host, location=top.location);
   top.logicType = f.logicFunctionItem.resultLogicType;
   top.errors := a.errors;
+  top.hasFlowGraph = null(top.errors) && f.logicFunctionItem.hasFlowGraph && a.hasFlowGraph;
   
   local applyResult::Pair<[FlowDef] [FlowExpr]> =
     applyFlowGraph(f.logicFunctionItem.flowGraph, a.argumentFlowExprs);
@@ -85,6 +90,28 @@ top::LogicExpr ::= f::Name a::LogicExprs
   
   top.errors <- f.logicFunctionLookupCheck;
   top.errors <- if null(f.logicFunctionLookupCheck) then a.argumentErrors else [];
+}
+
+abstract production condLogicExpr
+top::LogicExpr ::= e1::LogicExpr e2::LogicExpr e3::LogicExpr
+{
+  top.pp = ppConcat([e1.pp, text("?"), space(), e2.pp, space(), text(":"), space(), e2.pp]);
+  top.host = conditionalExpr(e1.host, e2.host, e3.host, location=top.location);
+  top.logicType = if e2.logicType.width > e3.logicType.width then e2.logicType else e3.logicType;
+  top.errors := e1.errors ++ e2.errors ++ e3.errors;
+  top.hasFlowGraph = null(top.errors) && e1.hasFlowGraph && e2.hasFlowGraph && e3.hasFlowGraph;
+  local thenBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
+  local elseBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e3.flowExprs);
+  local condTmpName::String = s"_condTmp${toString(genInt())}";
+  local condFlowExpr::FlowExpr = foldBinary1(orFlowExpr, e1.flowExprs);
+  top.flowDefs =
+    e1.flowDefs ++ e2.flowDefs ++ e3.flowDefs ++ thenBitPad.fst ++ elseBitPad.fst ++
+    [flowDef(condTmpName, condFlowExpr)];
+  top.flowExprs =
+    zipWith(
+      orFlowExpr,
+      map(andFlowExpr(nodeFlowExpr(condTmpName), _), thenBitPad.snd),
+      map(andFlowExpr(notFlowExpr(nodeFlowExpr(condTmpName)), _), elseBitPad.snd));
 }
 
 -- Custom bit manipulation constructs
@@ -106,6 +133,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
       location=top.location);
   top.logicType = unsignedLogicType(e1.logicType.width + e2.logicType.width);
   top.errors := e1.errors ++ e2.errors;
+  top.hasFlowGraph = null(top.errors) && e1.hasFlowGraph && e2.hasFlowGraph;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
   top.flowExprs = e1.flowExprs ++ e2.flowExprs;
 }
@@ -126,6 +154,7 @@ top::LogicExpr ::= e::LogicExpr i::Integer
       location=builtin);
   top.logicType = boolLogicType();
   top.errors := e.errors;
+  top.hasFlowGraph = null(top.errors) && e.hasFlowGraph;
   top.flowDefs = e.flowDefs;
   top.flowExprs = [head(drop(e.logicType.width - i - 1, e.flowExprs))];
   
@@ -151,6 +180,7 @@ top::LogicExpr ::= e::LogicExpr i::Integer j::Integer
       location=builtin);
   top.logicType = unsignedLogicType(i - j + 1);
   top.errors := e.errors;
+  top.hasFlowGraph = null(top.errors) && e.hasFlowGraph;
   top.flowDefs = e.flowDefs;
   top.flowExprs = take(i - j + 1, drop(e.logicType.width - i - 1, e.flowExprs));
   
@@ -183,6 +213,7 @@ top::LogicExpr ::= e::LogicExpr
   top.host = bitNegateExpr(e.host, location=top.location);
   top.logicType = e.logicType;
   top.errors := e.errors;
+  top.hasFlowGraph = null(top.errors) && e.hasFlowGraph;
   top.flowDefs = e.flowDefs;
   top.flowExprs = map(notFlowExpr, e.flowExprs);
   
@@ -199,6 +230,7 @@ top::LogicExpr ::= e::LogicExpr
   top.host = notExpr(e.host, location=top.location);
   top.logicType = boolLogicType();
   top.errors := e.errors;
+  top.hasFlowGraph = null(top.errors) && e.hasFlowGraph;
   top.flowDefs = e.flowDefs;
   top.flowExprs = [notFlowExpr(foldBinary1(orFlowExpr, e.flowExprs))];
 }
@@ -215,6 +247,7 @@ top::LogicExpr ::= e::LogicExpr
     | _ -> errorLogicType()
     end;
   top.errors := e.errors;
+  top.hasFlowGraph = null(top.errors) && e.hasFlowGraph;
   local bitPad::[FlowExpr] = -- Add a leading 0 if we do an unsigned-to-signed conversion
     case e.logicType of
       unsignedLogicType(_) -> constantFlowExpr(false) :: e.flowExprs
@@ -237,6 +270,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host = bitTrimExpr(top.logicType.width, addExpr(e1.host, e2.host, location=top.location));
   top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
   top.errors := e1.errors ++ e2.errors;
+  top.hasFlowGraph = null(top.errors) && e1.hasFlowGraph && e2.hasFlowGraph;
   local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
   local rhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
   local result::Pair<[FlowDef] [FlowExpr]> = makeAddFlowExprs(top.logicFunctionEnv, lhsBitPad.snd, rhsBitPad.snd);
@@ -260,6 +294,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host = bitTrimExpr(top.logicType.width, subExpr(e1.host, e2.host, location=top.location));
   top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
   top.errors := e1.errors ++ e2.errors;
+  top.hasFlowGraph = null(top.errors) && e1.hasFlowGraph && e2.hasFlowGraph;
   local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
   local rhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
   local result::Pair<[FlowDef] [FlowExpr]> = makeSubFlowExprs(top.logicFunctionEnv, lhsBitPad.snd, rhsBitPad.snd);
@@ -283,6 +318,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host = andBitExpr(e1.host, e2.host, location=top.location);
   top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
   top.errors := e1.errors ++ e2.errors;
+  top.hasFlowGraph = null(top.errors) && e1.hasFlowGraph && e2.hasFlowGraph;
   local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
   local rhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
   top.flowDefs = e1.flowDefs ++ e2.flowDefs ++ lhsBitPad.fst ++ rhsBitPad.fst;
@@ -305,6 +341,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host = xorExpr(e1.host, e2.host, location=top.location);
   top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
   top.errors := e1.errors ++ e2.errors;
+  top.hasFlowGraph = null(top.errors) && e1.hasFlowGraph && e2.hasFlowGraph;
   
   local xorId::Integer = genInt();
   local lhsTmpNames::[String] =
@@ -346,6 +383,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host = orBitExpr(e1.host, e2.host, location=top.location);
   top.logicType = if e1.logicType.width >= e2.logicType.width then e1.logicType else e2.logicType;
   top.errors := e1.errors ++ e2.errors;
+  top.hasFlowGraph = null(top.errors) && e1.hasFlowGraph && e2.hasFlowGraph;
   local lhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e1.flowExprs);
   local rhsBitPad::Pair<[FlowDef] [FlowExpr]> = top.logicType.bitPad(e2.flowExprs);
   top.flowDefs = e1.flowDefs ++ e2.flowDefs ++ lhsBitPad.fst ++ rhsBitPad.fst;
@@ -368,6 +406,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host = andExpr(e1.host, e2.host, location=top.location);
   top.logicType = boolLogicType();
   top.errors := e1.errors ++ e2.errors;
+  top.hasFlowGraph = null(top.errors) && e1.hasFlowGraph && e2.hasFlowGraph;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
   top.flowExprs =
     [andFlowExpr(foldBinary1(orFlowExpr, e1.flowExprs), foldBinary1(orFlowExpr, e2.flowExprs))];
@@ -380,6 +419,7 @@ top::LogicExpr ::= e1::LogicExpr e2::LogicExpr
   top.host = orExpr(e1.host, e2.host, location=top.location);
   top.logicType = boolLogicType();
   top.errors := e1.errors ++ e2.errors;
+  top.hasFlowGraph = null(top.errors) && e1.hasFlowGraph && e2.hasFlowGraph;
   top.flowDefs = e1.flowDefs ++ e2.flowDefs;
   top.flowExprs =
     [orFlowExpr(foldBinary1(orFlowExpr, e1.flowExprs), foldBinary1(orFlowExpr, e2.flowExprs))];
@@ -392,7 +432,7 @@ autocopy attribute callLocation::Location;
 synthesized attribute argumentFlowDefs::[FlowDef];
 synthesized attribute argumentFlowExprs::[FlowExpr];
 
-nonterminal LogicExprs with logicValueEnv, logicFunctionEnv, argumentPosition, expectedParameterNames, expectedLogicTypes, callLocation, pps, host<Exprs>, count, logicTypes, errors, argumentErrors, flowDefs, flowExprs, argumentFlowDefs, argumentFlowExprs;
+nonterminal LogicExprs with logicValueEnv, logicFunctionEnv, argumentPosition, expectedParameterNames, expectedLogicTypes, callLocation, pps, host<Exprs>, count, logicTypes, errors, argumentErrors, hasFlowGraph, flowDefs, flowExprs, argumentFlowDefs, argumentFlowExprs;
 
 abstract production consLogicExpr
 top::LogicExprs ::= h::LogicExpr t::LogicExprs
@@ -411,11 +451,12 @@ top::LogicExprs ::= h::LogicExpr t::LogicExprs
          else []) ++ t.argumentErrors
     | [] -> [err(top.callLocation, s"Call expected ${toString(top.argumentPosition - 1)} arguments, got ${toString(top.argumentPosition + t.count)}")]
     end;
+  top.hasFlowGraph = null(top.errors) && h.hasFlowGraph && t.hasFlowGraph;
   top.flowDefs = h.flowDefs ++ t.flowDefs;
   top.flowExprs = h.flowExprs ++ t.flowExprs;
   -- Pad the argument bits to be the full width of what is expected
   local bitPad::Pair<[FlowDef] [FlowExpr]> = head(top.expectedLogicTypes).bitPad(h.flowExprs);
-  top.argumentFlowDefs = h.flowDefs ++ t.flowDefs ++ bitPad.fst;
+  top.argumentFlowDefs = h.flowDefs ++ t.argumentFlowDefs ++ bitPad.fst;
   top.argumentFlowExprs = bitPad.snd ++ t.argumentFlowExprs;
   
   t.argumentPosition = 1 + top.argumentPosition;
@@ -435,6 +476,7 @@ top::LogicExprs ::=
     if !null(top.expectedLogicTypes)
     then [err(top.callLocation, s"Call expected ${toString(top.argumentPosition + length(top.expectedLogicTypes) - 1)} arguments, got only ${toString(top.argumentPosition - 1)}")]
     else []; 
+  top.hasFlowGraph = true;
   top.flowDefs = [];
   top.flowExprs = [];
   top.argumentFlowDefs = [];

@@ -37,13 +37,14 @@ top::LogicValueItem ::=
 autocopy attribute logicFunctionEnv::Scopes<LogicFunctionItem>;
 synthesized attribute logicFunctionDefs::Contribs<LogicFunctionItem>;
 
-nonterminal LogicFunctionItem with parameterLogicTypes, resultLogicType, flowGraph, sourceLocation;
+nonterminal LogicFunctionItem with parameterLogicTypes, resultLogicType, hasFlowGraph, flowGraph, sourceLocation;
 
 abstract production logicFunctionItem
 top::LogicFunctionItem ::= f::Decorated LogicFunctionDecl
 {
   top.parameterLogicTypes = f.parameterLogicTypes;
   top.resultLogicType = f.resultLogicType;
+  top.hasFlowGraph = f.hasFlowGraph;
   top.flowGraph = f.flowGraph;
   top.sourceLocation = f.sourceLocation;
 }
@@ -53,6 +54,7 @@ top::LogicFunctionItem ::=
 {
   top.parameterLogicTypes = [];
   top.resultLogicType = errorLogicType();
+  top.hasFlowGraph = false;
   top.flowGraph = error("Demanded logic flow graph when function lookup failed"); -- No sensible default
   top.sourceLocation = loc("nowhere", -1, -1, -1, -1, -1, -1);
 }

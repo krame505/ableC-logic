@@ -19,6 +19,9 @@ terminal LogicalAndOp_t '&&' association=left, precedence=5, lexer classes {Csym
 
 terminal LogicalOrOp_t '||' association=left, precedence=4, lexer classes {Csymbol};
 
+terminal CondOp_t    '?' association=right, precedence=3, lexer classes {Csymbol};
+terminal CondColon_t ':' association=right, precedence=3, lexer classes {Csymbol};
+
 terminal BitAppendOp_t /,/ association=right, precedence=1, lexer classes {Csymbol};
 
 terminal LogicIdentifier_t /[A-Za-z_\$][A-Za-z_0-9\$]*/;
@@ -91,6 +94,9 @@ concrete productions top::LogicExpr_c
   
 | e1::LogicExpr_c LogicalOrOp_t e2::LogicExpr_c
   { top.ast = logicalOrLogicExpr(e1.ast, e2.ast, location=top.location); }
+  
+| e1::LogicExpr_c CondOp_t e2::LogicExpr_c CondColon_t e3::LogicExpr_c
+  { top.ast = condLogicExpr(e1.ast, e2.ast, e3.ast, location=top.location); }
 
 | e1::LogicExpr_c BitAppendOp_t e2::LogicExpr_c
   { top.ast = bitAppendLogicExpr(e1.ast, e2.ast, location=top.location); }
