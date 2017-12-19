@@ -164,14 +164,14 @@ synthesized attribute outputChannels::[OutputChannel] occurs on FlowExprs;
 inherited attribute isNegated::Boolean occurs on FlowExpr;
 
 -- An environment threaded through the flow graph, mapping existing gate inputs to their outputs
-type ChannelAssignments = Pair<[NANDGate] tm:Map<ChannelId tm:Map<ChannelId ChannelId>>>; 
+type ChannelAssignments = Pair<[NANDGate] tm:Map<Pair<ChannelId ChannelId> ChannelId>>; 
 inherited attribute channelAssignmentsIn::ChannelAssignments occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
 synthesized attribute channelAssignmentsOut::ChannelAssignments occurs on FlowDefs, FlowDef, FlowExprs, FlowExpr;
 
 aspect production flowGraph
 top::FlowGraph ::= name::String flowDefs::FlowDefs flowExprs::FlowExprs
 {
-  flowDefs.channelAssignmentsIn = pair([], tm:empty(compareString));
+  flowDefs.channelAssignmentsIn = pair([], tm:empty(compareChannelAssignmentKeys));
   flowExprs.channelAssignmentsIn = flowDefs.channelAssignmentsOut;
   
   local gateConfig::[NANDGate] = reverse(flowExprs.channelAssignmentsOut.fst);
@@ -321,27 +321,21 @@ Pair<ChannelId ChannelAssignments> ::= input1::ChannelId input2::ChannelId cas::
   local key2::ChannelId = if input1 > input2 then input1 else input2;
   local nextChannel::ChannelId = s"gate_${toString(genInt())}";
   return
-    case tm:lookup(key1, cas.snd) of
-      [entry] ->
-        case tm:lookup(key2, entry) of
-        -- Case 1: That gate already exists, return its output channel
-          [output] -> pair(output, cas)
-        -- Case 2: A gate with the same key1 already exists, create the gate and add it to the inner map
-        | [] ->
-            pair(
-              nextChannel,
-              pair(
-                nandGate(nextChannel, input1, input2) :: cas.fst,
-                tm:update(key1, [tm:add([pair(key2, nextChannel)], entry)], cas.snd)))
-        end
-    -- Case 3: A gate with the same key1 does not exist, create a new inner map with the new gate
+    case tm:lookup(pair(key1, key2), cas.snd) of
+      [entry] -> pair(entry, cas)
     | [] ->
       pair(
         nextChannel,
         pair(
           nandGate(nextChannel, input1, input2) :: cas.fst,
-          tm:add(
-            [pair(key1, tm:add([pair(key2, nextChannel)], tm:empty(compareString)))],
-            cas.snd)))
+          tm:add([pair(pair(key1, key2), nextChannel)], cas.snd)))
     end;
+}
+
+function compareChannelAssignmentKeys
+Integer ::= key1::Pair<ChannelId ChannelId> key2::Pair<ChannelId ChannelId>
+{
+  local res1::Integer = compareString(key1.fst, key2.fst);
+  local res2::Integer = compareString(key1.snd, key2.snd);
+  return if res1 != 0 then res1 else res2;
 }
