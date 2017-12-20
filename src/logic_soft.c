@@ -12,7 +12,7 @@ gate_t gate_config[NUM_GATES] = {0};
 channel_t output_config[NUM_OUTPUTS] = {0};
 bool static_data[NUM_STATIC_CHANNELS] = {0};
 
-#define DATA_HIGH_BIT (1lu << INPUT_DATA_SIZE - 1)
+#define DATA_HIGH_BIT (1lu << WORD_SIZE - 1)
 
 void soft_gate_config(channel_t channel, channel_t input1, channel_t input2) {
   if (channel < NUM_INPUTS) {
@@ -96,19 +96,25 @@ data_t soft_invoke(data_t val1, data_t val2) {
 #endif
   bool data[NUM_CHANNELS];
   channel_t i = 0;
-  for (; i < INPUT_DATA_SIZE; i++) {
+  for (; i < WORD_SIZE; i++) {
 #ifdef DEBUG
     fprintf(stderr, "[%4d] <- %d\n", i, (val1 & DATA_HIGH_BIT) != 0);
 #endif
     data[i] = (val1 & DATA_HIGH_BIT) != 0;
     val1 <<= 1;
   }
-  for (; i < INPUT_DATA_SIZE * 2; i++) {
+  for (; i < WORD_SIZE * 2; i++) {
 #ifdef DEBUG
     fprintf(stderr, "[%4u] <- %d\n", i, (val2 & DATA_HIGH_BIT) != 0);
 #endif
     data[i] = (val2 & DATA_HIGH_BIT) != 0;
     val2 <<= 1;
+  }
+  for (; i < NUM_INPUTS; i++) {
+#ifdef DEBUG
+    fprintf(stderr, "[%4u] <- %d\n", i, static_data[i - NUM_DIRECT_INPUTS] != 0);
+#endif
+    data[i] = static_data[i - NUM_DIRECT_INPUTS] != 0;
   }
   for (; i < NUM_CHANNELS; i++) {
 #ifdef DEBUG
@@ -136,47 +142,15 @@ data_t soft_invoke(data_t val1, data_t val2) {
   return result;
 }
 
-data_t soft_invoke_static(data_t val1) {
+void soft_set_static(unsigned index, data_t val) {
 #ifdef DEBUG
-  fprintf(stderr, "Input: %d\n", val1);
+  fprintf(stderr, "Static value %d: %d\n", index, val);
 #endif
-  bool data[NUM_CHANNELS];
-  channel_t i = 0;
-  for (; i < INPUT_DATA_SIZE; i++) {
+  for (channel_t i = 0; i < WORD_SIZE; i++) {
 #ifdef DEBUG
-    fprintf(stderr, "[%4d] <- %d\n", i, (val1 & DATA_HIGH_BIT) != 0);
+    fprintf(stderr, "[%4d] <- %d\n", NUM_INPUTS + WORD_SIZE * index + i, (val & DATA_HIGH_BIT) != 0);
 #endif
-    data[i] = (val1 & DATA_HIGH_BIT) != 0;
-    val1 <<= 1;
+    static_data[index * WORD_SIZE + i] = (val & DATA_HIGH_BIT) != 0;
+    val <<= 1;
   }
-  for (; i < INPUT_DATA_SIZE * 2; i++) {
-#ifdef DEBUG
-    fprintf(stderr, "[%4u] <- %d\n", i, static_data[i - NUM_DIRECT_INPUTS]);
-#endif
-    data[i] = static_data[i - NUM_DIRECT_INPUTS];
-  }
-  for (; i < NUM_CHANNELS; i++) {
-#ifdef DEBUG
-    fprintf(stderr, "[%4u] <- [%4u] NAND [%4u] = %d NAND %d = %d\n", i, gate_config[i - NUM_INPUTS].input1, gate_config[i - NUM_INPUTS].input2, data[gate_config[i - NUM_INPUTS].input1], data[gate_config[i - NUM_INPUTS].input2], !(data[gate_config[i - NUM_INPUTS].input1] && data[gate_config[i - NUM_INPUTS].input2]));
-#endif
-    data[i] = !(data[gate_config[i - NUM_INPUTS].input1] && data[gate_config[i - NUM_INPUTS].input2]);
-  }
-  data_t result = 0;
-  for (i = 0; i < NUM_DIRECT_OUTPUTS; i++) {
-#ifdef DEBUG
-    fprintf(stderr, "[[%2u]] <- [%4u] = %d\n", i, output_config[i], data[output_config[i]]);
-#endif
-    result <<= 1;
-    result |= data[output_config[i]];
-  }
-  for (; i < NUM_OUTPUTS; i++) {
-#ifdef DEBUG
-    fprintf(stderr, "[[%2u]] <- [%4u] = %d\n", i, output_config[i], data[output_config[i]]);
-#endif
-    static_data[i - NUM_DIRECT_OUTPUTS] = data[output_config[i]];
-  }
-#ifdef DEBUG
-  fprintf(stderr, "Output: %d\n", result);
-#endif
-  return result;
 }

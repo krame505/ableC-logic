@@ -123,7 +123,6 @@ logic signed:32 fib(; signed:32 a, signed:32 b) {
 }
 
 int main (int argc, char **argv) {
-
   printf("0x%x\n", foo(12, true));
   uint16_t x = 1;
   printf("0x%x\n", x);

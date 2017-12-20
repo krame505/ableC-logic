@@ -179,11 +179,14 @@ top::FlowExpr ::= b::Boolean
 
 -- Invariant: A given parameter is only referenced in a flow graph at most once
 abstract production parameterFlowExpr
-top::FlowExpr ::= i::Integer
+top::FlowExpr ::= static::Boolean i::Integer
 {
   propagate simplified;
-  top.pp = brackets(text(toString(i)));
-  top.applied = head(drop(i, top.arguments));
+  top.pp = cat(text(if static then "static_input" else "input"), brackets(text(toString(i))));
+  top.applied =
+    if static
+    then error("Can't build flow graph for erroneous application of static logic function")
+    else head(drop(i, top.arguments));
   top.hasParameters = true;
   top.referencedNodes = [];
   top.isSimple = false; -- NOT simple, since we don't know if what will be substituted in is simple

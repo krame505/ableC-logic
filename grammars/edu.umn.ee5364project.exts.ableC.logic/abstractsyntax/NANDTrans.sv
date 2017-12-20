@@ -26,8 +26,8 @@ top::ChannelItem ::= g::Decorated NANDGate
   top.criticalPathLength = g.criticalPathLength;
 }
 
-inherited attribute numInputs::Integer;
---inherited attribute numOutputs::Integer;
+inherited attribute numDirectInputs::Integer;
+inherited attribute numStaticChannels::Integer;
 
 -- Analyses perfomed on a NANDFlowGraph
 synthesized attribute numGatesRequired::Integer;
@@ -35,7 +35,7 @@ synthesized attribute criticalPathLength::Integer;
 synthesized attribute softHostInitTrans::Stmt;
 synthesized attribute hardHostInitTrans::Stmt;
 
-nonterminal NANDFlowGraph with numInputs, pp, numGatesRequired, criticalPathLength, softHostInitTrans, hardHostInitTrans;
+nonterminal NANDFlowGraph with numDirectInputs, numStaticChannels, pp, numGatesRequired, criticalPathLength, softHostInitTrans, hardHostInitTrans;
 
 abstract production nandFlowGraph
 top::NANDFlowGraph ::= gateConfig::NANDGates outputChannels::OutputChannels
@@ -49,11 +49,14 @@ top::NANDFlowGraph ::= gateConfig::NANDGates outputChannels::OutputChannels
   gateConfig.channelEnv =
     tm:add(
       map(
-        \ i::Integer -> pair(inputChannelId(i), inputChannelItem(i)),
-        range(0, top.numInputs)),
+        \ i::Integer -> pair(inputChannelId(false, i), inputChannelItem(i)),
+        range(0, top.numDirectInputs)) ++
+      map(
+        \ i::Integer -> pair(inputChannelId(true, i), inputChannelItem(i + top.numDirectInputs)),
+        range(0, top.numStaticChannels)),
       tm:empty(compareString));
   outputChannels.channelEnv = tm:add(gateConfig.channelContribs, gateConfig.channelEnv);
-  gateConfig.nextChannelIndex = top.numInputs;
+  gateConfig.nextChannelIndex = top.numDirectInputs + top.numStaticChannels;
 }
 
 inherited attribute nextChannelIndex::Integer;
@@ -253,9 +256,9 @@ top::FlowExpr ::= b::Boolean
 }
 
 aspect production parameterFlowExpr
-top::FlowExpr ::= i::Integer
+top::FlowExpr ::= static::Boolean i::Integer
 {
-  local paramChannelId::ChannelId = inputChannelId(i);
+  local paramChannelId::ChannelId = inputChannelId(static, i);
   local gate1::Pair<ChannelId ChannelAssignments> =
     gateChannelId(paramChannelId, paramChannelId, top.channelAssignmentsIn);
   top.transChannel = if top.isNegated then gate1.fst else paramChannelId;
@@ -313,9 +316,9 @@ top::FlowExpr ::= e::FlowExpr
 }
 
 function inputChannelId
-ChannelId ::= i::Integer
+ChannelId ::= static::Boolean i::Integer
 {
-  return s"input_${toString(i)}";
+  return if static then s"static_input_${toString(i)}" else s"input_${toString(i)}";
 }
 
 function gateChannelId

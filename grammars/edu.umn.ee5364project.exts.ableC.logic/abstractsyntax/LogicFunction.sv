@@ -98,6 +98,11 @@ top::Stmt ::= id::Name
   top.labelDefs := [];
   
   -- Look up specification values defined in the header file
+  local wordSize::Integer =
+    case lookupValue("WORD_SIZE", top.env) of
+      [enumValueItem(enumItem(_, justExpr(realConstant(integerConstant(val, _, _)))))] -> toInt(val)
+    | _ -> error("Failed to look up env value")
+    end;
   local numDirectInputs::Integer =
     case lookupValue("NUM_DIRECT_INPUTS", top.env) of
       [enumValueItem(enumItem(_, justExpr(realConstant(integerConstant(val, _, _)))))] -> toInt(val)
@@ -126,19 +131,14 @@ top::Stmt ::= id::Name
   local numInputs::Integer = numDirectInputs + numStaticChannels;
   local numOutputs::Integer = numDirectOutputs + numStaticChannels;
   local numChannels::Integer = numInputs + numGates;
-  local inputDataSize::Integer = numInputs / 2;
+  local numInputWords::Integer = numDirectInputs / wordSize;
+  local numStaticChannelWords::Integer = numStaticChannels / wordSize;
   
   id.logicFunctionEnv = top.env.logicFunctions;
   local flowGraph::FlowGraph = id.logicFunctionItem.flowGraph;
   local nandFlowGraph::NANDFlowGraph = flowGraph.nandFlowGraph;
-  -- The actual width, not the expected one, so we can generate a translation for error checking
-  -- even if the widths are wrong. 
-  nandFlowGraph.numInputs =
-    sum(
-      map(
-        (.width),
-        id.logicFunctionItem.parameterLogicTypes ++
-        id.logicFunctionItem.staticParameterLogicTypes));
+  nandFlowGraph.numDirectInputs = numDirectInputs;
+  nandFlowGraph.numStaticChannels = numStaticChannels;
   local numGatesRequired::Integer = nandFlowGraph.numGatesRequired;
   local criticalPathLength::Integer = nandFlowGraph.criticalPathLength;
   
@@ -154,26 +154,27 @@ Critical path length: ${toString(criticalPathLength)}
      then checkLogicSoftHInclude(id.location, top.env)
      else checkLogicHInclude(id.location, top.env)) ++ id.logicFunctionLookupCheck;
   local semanticErrors::[Message] =
-    case id.logicFunctionItem.parameterLogicTypes, id.logicFunctionItem.staticParameterLogicTypes of
-      [t1, t2], [] ->
-        (if t1.width != inputDataSize
-         then [err(id.location, s"Translation requires invoked logic function parameter 1 to have width ${toString(inputDataSize)} (got ${toString(t1.width)})")]
-         else []) ++
-        (if t2.width != inputDataSize
-         then [err(id.location, s"Translation requires invoked logic function parameter 2 to have width ${toString(inputDataSize)} (got ${toString(t2.width)})")]
-         else [])
-    | [t1], [t2] ->
-        (if t1.width != inputDataSize
-         then [err(id.location, s"Translation requires invoked logic function parameter 1 to have width ${toString(inputDataSize)} (got ${toString(t1.width)})")]
-         else []) ++
-        (if t2.width != inputDataSize
-         then [err(id.location, s"Translation requires invoked logic function static parameter 1 to have width ${toString(inputDataSize)} (got ${toString(t2.width)})")]
-         else [])
-    | a, b ->
-      if length(a) + length(b) != 2
-      then [err(id.location, s"Translation requires invoked logic function to have exactly 2 parameters (got ${toString(length(a) + length(b))})")]
-      else [err(id.location, s"Translation requires invoked logic function to have no more than 1 static parameter (got ${toString(length(b))})")]
-    end ++
+    (if length(id.logicFunctionItem.parameterLogicTypes) > numInputWords
+     then [err(id.location, s"Translation requires invoked logic function to have no more than ${toString(numInputWords)} parameters (got ${toString(length(id.logicFunctionItem.parameterLogicTypes))})")]
+     else []) ++
+    (if length(id.logicFunctionItem.staticParameterLogicTypes) > numStaticChannelWords
+     then [err(id.location, s"Translation requires invoked logic function to have no more than ${toString(numStaticChannelWords)} static parameters (got ${toString(length(id.logicFunctionItem.staticParameterLogicTypes))})")]
+     else []) ++
+    concat(
+      zipWith(
+        \ i::Integer t::LogicType ->
+          if t.width != wordSize
+          then [err(id.location, s"Translation requires invoked logic function parameter ${toString(i)} to have width ${toString(wordSize)} (got ${toString(t.width)})")]
+          else [],
+        range(1, length(id.logicFunctionItem.parameterLogicTypes) + 1),
+        id.logicFunctionItem.parameterLogicTypes) ++
+      zipWith(
+        \ i::Integer t::LogicType ->
+          if t.width != wordSize
+          then [err(id.location, s"Translation requires invoked logic function static parameter ${toString(i)} to have width ${toString(wordSize)} (got ${toString(t.width)})")]
+          else [],
+        range(1, length(id.logicFunctionItem.staticParameterLogicTypes) + 1),
+        id.logicFunctionItem.staticParameterLogicTypes)) ++
     (if id.logicFunctionItem.resultLogicType.width != numDirectOutputs
      then [err(id.location, s"Translation requires invoked logic function result to have width ${toString(numDirectOutputs)} (got ${toString(id.logicFunctionItem.resultLogicType.width)})")]
      else []);
@@ -278,31 +279,41 @@ top::Expr ::= id::Name args::Exprs staticArgs::Exprs
     (if !null(lookupMisc("--xc-logic-soft", top.env)) || null(lookupMisc("--xc-logic-hard", top.env))
      then checkLogicSoftHInclude(id.location, top.env)
      else checkLogicHInclude(id.location, top.env)) ++
-    id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors ++
-    (if args.count != 1
-     then [err(top.location, s"Translation requires invoked logic function to have exactly 1 arguments (got ${toString(args.count)})")]
-     else []) ++
-    (if staticArgs.count != 1
-     then [err(top.location, s"Translation requires invoked logic function to have exactly 1 static argument (got ${toString(args.count)})")]
-     else []);
+    id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
   local softFwrd::Expr =
-    directCallExpr(
-      name("soft_invoke", location=builtin),
-      appendExprs(args, staticArgs),
+    stmtExpr(
+      staticArgs.softStaticInvokeTrans,
+      directCallExpr(
+        name("soft_invoke", location=builtin),
+        case args of
+          nilExpr() -> consExpr(mkIntConst(0, builtin), consExpr(mkIntConst(0, builtin), nilExpr()))
+        | consExpr(e, nilExpr()) -> consExpr(e, consExpr(mkIntConst(0, builtin), nilExpr()))
+        | _ -> args
+        end,
+        location=builtin),
       location=builtin);
   local hardFwrd::Expr =
     substExpr(
-      [declRefSubstitution("__a__", case args of consExpr(h, _) -> h end),
+      [declRefSubstitution(
+         "__a__",
+         case args of
+           consExpr(h, _) -> h
+         | _ -> mkIntConst(0, builtin)
+         end),
        declRefSubstitution(
          "__b__",
          case args of
            consExpr(_, consExpr(h, _)) -> h
-         | _ -> case staticArgs of consExpr(h, _) -> h end
-         end)],
+         | _ -> mkIntConst(0, builtin)
+         end),
+       stmtSubstitution("__static_moves__", staticArgs.hardStaticInvokeTrans)],
       parseExpr(s"""
 ({proto_typedef int32_t;
   int32_t _result;
-  asm("lgi %0, %1, %2" : "=r" (_result) : "r" (__a__) , "r" (__b__));
+  __static_moves__;
+  asm("lgi %0, %1, %2" :
+      "=r" (_result) :
+      "r" (__a__), "r" (__b__));
   _result;})
 """));
   
@@ -374,33 +385,36 @@ top::Expr ::= id::Name args::Exprs
     (if !null(lookupMisc("--xc-logic-soft", top.env)) || null(lookupMisc("--xc-logic-hard", top.env))
      then checkLogicSoftHInclude(id.location, top.env)
      else checkLogicHInclude(id.location, top.env)) ++
-    id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors ++
-    (if length(id.logicFunctionItem.staticParameterLogicTypes) > 0
-     then if args.count != 1
-       then [err(top.location, s"Translation requires invoked logic function to have exactly 1 argument (got ${toString(args.count)})")]
-       else []
-     else if args.count != 2
-       then [err(top.location, s"Translation requires invoked logic function to have exactly 2 arguments (got ${toString(args.count)})")]
-       else []);
+    id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
   local softFwrd::Expr =
-    if length(id.logicFunctionItem.staticParameterLogicTypes) > 0
-    then directCallExpr(name("soft_invoke_static", location=builtin), args, location=builtin)
-    else directCallExpr(name("soft_invoke", location=builtin), args, location=builtin);
+    directCallExpr(
+      name("soft_invoke", location=builtin),
+      case args of
+        nilExpr() -> consExpr(mkIntConst(0, builtin), consExpr(mkIntConst(0, builtin), nilExpr()))
+      | consExpr(e, nilExpr()) -> consExpr(e, consExpr(mkIntConst(0, builtin), nilExpr()))
+      | _ -> args
+      end,
+      location=builtin);
   local hardFwrd::Expr =
     substExpr(
-      [declRefSubstitution("__a__", case args of consExpr(h, _) -> h end),
-       declRefSubstitution("__b__", case args of consExpr(_, consExpr(h, _)) -> h end)],
-      if length(id.logicFunctionItem.staticParameterLogicTypes) > 0
-      then parseExpr(s"""
+      [declRefSubstitution(
+         "__a__",
+         case args of
+           consExpr(h, _) -> h
+         | _ -> mkIntConst(0, builtin)
+         end),
+       declRefSubstitution(
+         "__b__",
+         case args of
+           consExpr(_, consExpr(h, _)) -> h
+         | _ -> mkIntConst(0, builtin)
+         end)],
+      parseExpr(s"""
 ({proto_typedef int32_t;
   int32_t _result;
-  asm("lgis %0, %1" : "=r" (_result) : "r" (__a__) );
-  _result;})
-""")
-      else parseExpr(s"""
-({proto_typedef int32_t;
-  int32_t _result;
-  asm("lgi %0, %1, %2" : "=r" (_result) : "r" (__a__) , "r" (__b__));
+  asm("lgi %0, %1, %2" :
+      "=r" (_result) :
+      "r" (__a__), "r" (__b__));
   _result;})
 """));
   
@@ -416,11 +430,28 @@ top::Expr ::= id::Name args::Exprs
 
 attribute expectedLogicTypes occurs on Exprs;
 synthesized attribute hostInvokeTrans::Exprs occurs on Exprs;
+synthesized attribute softStaticInvokeTrans::Stmt occurs on Exprs;
+synthesized attribute hardStaticInvokeTrans::Stmt occurs on Exprs;
 
 aspect production consExpr
 top::Exprs ::= h::Expr t::Exprs
 {
   top.hostInvokeTrans = consExpr(bitTrimExpr(head(top.expectedLogicTypes).width, h), t);
+  local staticRegister::Integer = top.argumentPosition - 1;
+  top.softStaticInvokeTrans =
+    seqStmt(
+      exprStmt(
+        directCallExpr(
+          name("soft_set_static", location=builtin),
+          consExpr(mkIntConst(staticRegister, builtin), consExpr(h, nilExpr())),
+          location=builtin)),
+      t.softStaticInvokeTrans);
+  top.hardStaticInvokeTrans =
+    seqStmt(
+      substStmt(
+        [declRefSubstitution("__a__", h)],
+        parseStmt(s"""asm("lgmove ${toString(staticRegister)}, %0" : : "r" (__a__));""")),
+      t.hardStaticInvokeTrans);
   t.expectedLogicTypes = tail(top.expectedLogicTypes);
 }
 
@@ -428,6 +459,8 @@ aspect production nilExpr
 top::Exprs ::=
 {
   top.hostInvokeTrans = nilExpr();
+  top.softStaticInvokeTrans = nullStmt();
+  top.hardStaticInvokeTrans = nullStmt();
 }
 
 synthesized attribute initProd::(Stmt ::= Name);
@@ -535,7 +568,7 @@ ${if top.isTopLevel then "static" else ""} inline __res_type__ _logic_function_$
   params.bitIndex = 0;
   params.isStaticIn = false;
   staticParams.logicValueEnv = addScope(params.logicValueDefs, params.logicValueEnv);
-  staticParams.bitIndex = length(params.flowDefs);
+  staticParams.bitIndex = 0;
   staticParams.isStaticIn = true;
   staticParams.staticFlowEnv = body.staticFlowEnvOut;
   body.logicValueEnv = addScope(staticParams.logicValueDefs, staticParams.logicValueEnv);
@@ -628,7 +661,9 @@ top::LogicParameterDecl ::= typeExpr::LogicTypeExpr id::Name
     zipWith(
       flowDef,
       top.flowIds,
-      map(parameterFlowExpr, range(top.bitIndex, top.bitIndex + typeExpr.logicType.width)));
+      map(
+        parameterFlowExpr(top.isStaticIn, _),
+        range(top.bitIndex, top.bitIndex + typeExpr.logicType.width)));
   top.staticFlowExprs = head(tm:lookup(id.name, top.staticFlowEnv));
   
   top.errors <- id.logicValueRedeclarationCheck;
