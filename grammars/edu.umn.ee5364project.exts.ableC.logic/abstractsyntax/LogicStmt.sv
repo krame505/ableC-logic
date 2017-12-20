@@ -77,9 +77,9 @@ top::LogicStmt ::= id::Name value::LogicExpr
   top.logicValueDefs = [];
   top.hasFlowGraph = null(top.errors) && value.hasFlowGraph;
   top.errors := value.errors;
-  top.flowDefs = value.flowDefs;
-  
-  top.staticFlowEnvOut = tm:add([pair(id.name, value.flowExprs)], top.staticFlowEnv);
+  local bitPad::Pair<[FlowDef] [FlowExpr]> = id.logicValueItem.logicType.bitPad(value.flowExprs);
+  top.flowDefs = value.flowDefs ++ bitPad.fst;
+  top.staticFlowEnvOut = tm:add([pair(id.name, bitPad.snd)], top.staticFlowEnv);
   
   top.errors <- id.logicValueLookupCheck;
   top.errors <-
