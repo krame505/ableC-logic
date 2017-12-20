@@ -293,7 +293,12 @@ top::Expr ::= id::Name args::Exprs staticArgs::Exprs
   local hardFwrd::Expr =
     substExpr(
       [declRefSubstitution("__a__", case args of consExpr(h, _) -> h end),
-       declRefSubstitution("__b__", case args of consExpr(_, consExpr(h, _)) -> h end)],
+       declRefSubstitution(
+         "__b__",
+         case args of
+           consExpr(_, consExpr(h, _)) -> h
+         | _ -> case staticArgs of consExpr(h, _) -> h end
+         end)],
       parseExpr(s"""
 ({proto_typedef int32_t;
   int32_t _result;
