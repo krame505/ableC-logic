@@ -503,11 +503,12 @@ top::LogicFunctionDecl ::= id::Name ret::LogicTypeExpr params::LogicParameters s
 proto_typedef bool, __res_type__, __params__;
 ${if top.isTopLevel then "static" else ""} inline __res_type__ _logic_function_${id.name}(bool hasStaticArgs, __params__) {
   __pre_decls__;
+  __res_type__ _result;
   if (hasStaticArgs) {
     __static_init__;
   }
   __body__;
-  __res_type__ _result = __result__;
+  _result = __result__;
   __static_init__;
   return _result;
 }
