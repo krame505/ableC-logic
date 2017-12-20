@@ -98,3 +98,13 @@ Integer ::= l::Integer  r::Integer
 {
   return if l <= r then if l == r then 0 else -1 else 1;
 }
+
+function appendParameters
+Parameters ::= ps1::Parameters ps2::Parameters
+{
+  return
+    case ps1 of
+      consParameters(h, t) -> consParameters(h, appendParameters(t, ps2))
+    | nilParameters() -> ps2
+    end;
+}

@@ -10,6 +10,7 @@ typedef struct {
 
 gate_t gate_config[NUM_GATES] = {0};
 channel_t output_config[NUM_OUTPUTS] = {0};
+bool static_data[NUM_STATIC_CHANNELS] = {0};
 
 #define DATA_HIGH_BIT (1lu << INPUT_DATA_SIZE - 1)
 
@@ -116,12 +117,63 @@ data_t soft_invoke(data_t val1, data_t val2) {
     data[i] = !(data[gate_config[i - NUM_INPUTS].input1] && data[gate_config[i - NUM_INPUTS].input2]);
   }
   data_t result = 0;
-  for (i = 0; i < NUM_OUTPUTS; i++) {
+  for (i = 0; i < NUM_DIRECT_OUTPUTS; i++) {
 #ifdef DEBUG
     fprintf(stderr, "[[%2u]] <- [%4u] = %d\n", i, output_config[i], data[output_config[i]]);
 #endif
     result <<= 1;
     result |= data[output_config[i]];
+  }
+  for (; i < NUM_OUTPUTS; i++) {
+#ifdef DEBUG
+    fprintf(stderr, "[[%2u]] <- [%4u] = %d\n", i, output_config[i], data[output_config[i]]);
+#endif
+    static_data[i - NUM_DIRECT_OUTPUTS] = data[output_config[i]];
+  }
+#ifdef DEBUG
+  fprintf(stderr, "Output: %d\n", result);
+#endif
+  return result;
+}
+
+data_t soft_invoke_static(data_t val1) {
+#ifdef DEBUG
+  fprintf(stderr, "Input: %d\n", val1);
+#endif
+  bool data[NUM_CHANNELS];
+  channel_t i = 0;
+  for (; i < INPUT_DATA_SIZE; i++) {
+#ifdef DEBUG
+    fprintf(stderr, "[%4d] <- %d\n", i, (val1 & DATA_HIGH_BIT) != 0);
+#endif
+    data[i] = (val1 & DATA_HIGH_BIT) != 0;
+    val1 <<= 1;
+  }
+  for (; i < INPUT_DATA_SIZE * 2; i++) {
+#ifdef DEBUG
+    fprintf(stderr, "[%4u] <- %d\n", i, static_data[i - NUM_DIRECT_INPUTS]);
+#endif
+    data[i] = static_data[i - NUM_DIRECT_INPUTS];
+  }
+  for (; i < NUM_CHANNELS; i++) {
+#ifdef DEBUG
+    fprintf(stderr, "[%4u] <- [%4u] NAND [%4u] = %d NAND %d = %d\n", i, gate_config[i - NUM_INPUTS].input1, gate_config[i - NUM_INPUTS].input2, data[gate_config[i - NUM_INPUTS].input1], data[gate_config[i - NUM_INPUTS].input2], !(data[gate_config[i - NUM_INPUTS].input1] && data[gate_config[i - NUM_INPUTS].input2]));
+#endif
+    data[i] = !(data[gate_config[i - NUM_INPUTS].input1] && data[gate_config[i - NUM_INPUTS].input2]);
+  }
+  data_t result = 0;
+  for (i = 0; i < NUM_DIRECT_OUTPUTS; i++) {
+#ifdef DEBUG
+    fprintf(stderr, "[[%2u]] <- [%4u] = %d\n", i, output_config[i], data[output_config[i]]);
+#endif
+    result <<= 1;
+    result |= data[output_config[i]];
+  }
+  for (; i < NUM_OUTPUTS; i++) {
+#ifdef DEBUG
+    fprintf(stderr, "[[%2u]] <- [%4u] = %d\n", i, output_config[i], data[output_config[i]]);
+#endif
+    static_data[i - NUM_DIRECT_OUTPUTS] = data[output_config[i]];
   }
 #ifdef DEBUG
   fprintf(stderr, "Output: %d\n", result);

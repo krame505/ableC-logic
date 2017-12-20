@@ -1,7 +1,6 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
 import core:monad;
-import silver:util:raw:treemap as tm;
 
 type ChannelId = String;
 
@@ -138,7 +137,12 @@ abstract production outputChannel
 top::OutputChannel ::= output::Integer channel::ChannelId
 {
   top.pp = pp"output ${text(toString(output))} = ${text(toString(channel))};";
-  local channelRef::ChannelItem = head(tm:lookup(channel, top.channelEnv));
+  local channelRef::ChannelItem =
+    case tm:lookup(channel, top.channelEnv) of
+      [c] -> c
+    | a :: b :: t -> error(s"Multiple definitions for channel ${channel}: ${hackUnparse(a :: b :: t)}")
+    | [] -> error(s"Undefined channel ${channel}")
+    end;
   top.criticalPathLength = channelRef.criticalPathLength;
   top.softHostInitTrans =
     exprStmt(

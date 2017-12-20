@@ -26,7 +26,13 @@ top::BlockItem_c ::= 'logic' decl::LogicFunctionDeclaration_c
 nonterminal LogicFunctionDeclaration_c with ast<Decl>, location;
 
 concrete production logicFunctionDeclaration_c
-top::LogicFunctionDeclaration_c ::= ret::LogicTypeExpr_c id::Identifier_t '(' params::LogicParameters_c ')' '{' body::LogicStmts_c '}'
+top::LogicFunctionDeclaration_c ::= ret::LogicTypeExpr_c id::Identifier_t '(' params::LogicParameters_c ')' '{' body::LogicStmts_c 'return' result::LogicExpr_c ';' '}'
 {
-  top.ast = logicFunctionDeclaration(logicFunctionDecl(fromId(id), ret.ast, params.ast, body.ast));
+  top.ast = logicFunctionDeclaration(logicFunctionDecl(fromId(id), ret.ast, params.ast, nilLogicParameter(), body.ast, result.ast));
+}
+
+concrete production logicFunctionWithStaticDeclaration_c
+top::LogicFunctionDeclaration_c ::= ret::LogicTypeExpr_c id::Identifier_t '(' params::LogicParameters_c ';' staticParams::LogicParameters_c ')' '{' body::LogicStmts_c 'return' result::LogicExpr_c ';' '}'
+{
+  top.ast = logicFunctionDeclaration(logicFunctionDecl(fromId(id), ret.ast, params.ast, staticParams.ast, body.ast, result.ast));
 }

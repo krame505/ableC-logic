@@ -7,22 +7,27 @@ synthesized attribute logicValueDefs::Contribs<LogicValueItem>;
 -- The flow ids introuduced by a declaration
 synthesized attribute flowIds::[String];
 
-nonterminal LogicValueItem with logicType, flowIds, sourceLocation;
+-- True if a value is a static parameter
+synthesized attribute isStatic::Boolean;
+
+nonterminal LogicValueItem with logicType, flowIds, isStatic, sourceLocation;
 
 abstract production declLogicValueItem
-top::LogicValueItem ::= decl::Decorated LogicStmt sourceLocation::Location
+top::LogicValueItem ::= decl::Decorated LogicValueDecl
 {
   top.logicType = decl.logicType;
   top.flowIds = decl.flowIds;
-  top.sourceLocation = sourceLocation;
+  top.isStatic = false;
+  top.sourceLocation = decl.sourceLocation;
 }
 
 abstract production parameterLogicValueItem
-top::LogicValueItem ::= decl::Decorated LogicParameter sourceLocation::Location
+top::LogicValueItem ::= decl::Decorated LogicParameterDecl
 {
   top.logicType = decl.logicType;
   top.flowIds = decl.flowIds;
-  top.sourceLocation = sourceLocation;
+  top.isStatic = decl.isStaticIn;
+  top.sourceLocation = decl.sourceLocation;
 }
 
 abstract production errorLogicValueItem
@@ -30,6 +35,7 @@ top::LogicValueItem ::=
 {
   top.logicType = errorLogicType();
   top.flowIds = error("Demanded logic flow ids when value lookup failed"); -- No sensible default
+  top.isStatic = false;
   top.sourceLocation = loc("nowhere", -1, -1, -1, -1, -1, -1);
 }
 
@@ -37,12 +43,13 @@ top::LogicValueItem ::=
 autocopy attribute logicFunctionEnv::Scopes<LogicFunctionItem>;
 synthesized attribute logicFunctionDefs::Contribs<LogicFunctionItem>;
 
-nonterminal LogicFunctionItem with parameterLogicTypes, resultLogicType, hasFlowGraph, flowGraph, sourceLocation;
+nonterminal LogicFunctionItem with parameterLogicTypes, staticParameterLogicTypes, resultLogicType, hasFlowGraph, flowGraph, sourceLocation;
 
 abstract production logicFunctionItem
 top::LogicFunctionItem ::= f::Decorated LogicFunctionDecl
 {
   top.parameterLogicTypes = f.parameterLogicTypes;
+  top.staticParameterLogicTypes = f.staticParameterLogicTypes;
   top.resultLogicType = f.resultLogicType;
   top.hasFlowGraph = f.hasFlowGraph;
   top.flowGraph = f.flowGraph;
@@ -53,6 +60,7 @@ abstract production errorLogicFunctionItem
 top::LogicFunctionItem ::=
 {
   top.parameterLogicTypes = [];
+  top.staticParameterLogicTypes = [];
   top.resultLogicType = errorLogicType();
   top.hasFlowGraph = false;
   top.flowGraph = error("Demanded logic flow graph when function lookup failed"); -- No sensible default

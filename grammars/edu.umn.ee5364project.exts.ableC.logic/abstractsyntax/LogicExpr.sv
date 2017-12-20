@@ -74,7 +74,11 @@ abstract production applyLogicExpr
 top::LogicExpr ::= f::Name a::LogicExprs
 {
   top.pp = parens( ppConcat([ f.pp, parens( ppImplode( cat( comma(), space() ), a.pps ))]) );
-  top.host = directCallExpr(getLogicFunctionHostName(f), a.host, location=top.location);
+  top.host =
+    directCallExpr(
+      getLogicFunctionHostName(f),
+      consExpr(mkIntConst(0, builtin), a.host),
+      location=top.location);
   top.logicType = f.logicFunctionItem.resultLogicType;
   top.errors := a.errors;
   top.hasFlowGraph = null(top.errors) && f.logicFunctionItem.hasFlowGraph && a.hasFlowGraph;
@@ -90,6 +94,10 @@ top::LogicExpr ::= f::Name a::LogicExprs
   
   top.errors <- f.logicFunctionLookupCheck;
   top.errors <- if null(f.logicFunctionLookupCheck) then a.argumentErrors else [];
+  top.errors <-
+    if !null(f.logicFunctionItem.staticParameterLogicTypes)
+    then [err(top.location, "Cannot apply logic function with static parameters")]
+    else [];
 }
 
 abstract production condLogicExpr

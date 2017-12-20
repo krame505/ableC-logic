@@ -1,7 +1,5 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
-import silver:util:raw:treemap as tm;
-
 -- The flow computed for every named bit, used to build the overall flow graph
 synthesized attribute flowDefs::[FlowDef];
 -- The flow computed for every bit of a logic expression
@@ -197,7 +195,12 @@ top::FlowExpr ::= id::String
   top.pp = text(id);
   top.applied = nodeFlowExpr(top.renameFn(id));
   
-  production refNode::FlowExprItem = head(tm:lookup(id, top.flowEnv));
+  production refNode::FlowExprItem =
+    case tm:lookup(id, top.flowEnv) of
+      [n] -> n
+    | a :: b :: t -> error(s"Multiple definitions for flow node ${id}: ${hackUnparse(a :: b :: t)}")
+    | [] -> error(s"Undefined flow node ${id}")
+    end;
   top.simplified = if refNode.canCollapse then refNode.simplified else nodeFlowExpr(id);
   top.hasParameters = false;
   top.referencedNodes = [id];

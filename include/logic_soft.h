@@ -13,5 +13,6 @@ void soft_gate_input_1_config(channel_t gate, channel_t input);
 void soft_gate_input_2_config(channel_t gate, channel_t input);
 void soft_output_config(channel_t output, channel_t input);
 data_t soft_invoke(data_t val1, data_t val2);
+data_t soft_invoke_static(data_t val1);
 
 #endif

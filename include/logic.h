@@ -29,11 +29,14 @@ static const bool false = 0;
 /* Definitions used for NAND translation */
 /* Enum is accessable by the compiler, while a #define is not */
 enum {
-  NUM_INPUTS = 64,
-  NUM_GATES = 1024,
-  NUM_OUTPUTS = 32,
+  NUM_DIRECT_INPUTS = 32,
+  NUM_DIRECT_OUTPUTS = 32,
+  NUM_STATIC_CHANNELS = 32,
+  NUM_GATES = 2048,
   MAX_CRITICAL_PATH_LENGTH = 256,
-  
+
+  NUM_INPUTS = NUM_DIRECT_INPUTS + NUM_STATIC_CHANNELS,
+  NUM_OUTPUTS = NUM_DIRECT_OUTPUTS + NUM_STATIC_CHANNELS,
   NUM_CHANNELS = NUM_INPUTS + NUM_GATES,
   INPUT_DATA_SIZE = NUM_INPUTS / 2,
   

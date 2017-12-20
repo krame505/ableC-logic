@@ -17,14 +17,14 @@ nonterminal LogicParameters_c with ast<LogicParameters>;
 concrete productions top::LogicParameters_c
 | 
   { top.ast = nilLogicParameter(); }
-| p::LogicParameter_c
+| p::LogicParameterDecl_c
   { top.ast = consLogicParameter(p.ast, nilLogicParameter()); }
-| h::LogicParameter_c ',' t::LogicParameters_c
+| h::LogicParameterDecl_c ',' t::LogicParameters_c
   { top.ast = consLogicParameter(h.ast, t.ast); }
 
-nonterminal LogicParameter_c with ast<LogicParameter>;
+nonterminal LogicParameterDecl_c with ast<LogicParameterDecl>;
 
-concrete productions top::LogicParameter_c
+concrete productions top::LogicParameterDecl_c
 | ty::LogicTypeExpr_c id::Identifier_t
 {
   top.ast = logicParameter(ty.ast, fromId(id));

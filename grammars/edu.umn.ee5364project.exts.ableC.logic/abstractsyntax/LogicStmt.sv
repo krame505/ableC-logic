@@ -1,10 +1,13 @@
 grammar edu:umn:ee5364project:exts:ableC:logic:abstractsyntax;
 
-autocopy attribute givenReturnLogicType::LogicType;
-
+-- Declarations of all variables, placed at the beginning of the function
 synthesized attribute hostPreDecls::Decls;
 
-nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, givenReturnLogicType, pps, hostPreDecls, host<Stmt>, logicValueDefs, errors, hasFlowGraph, flowDefs, flowExprs;
+-- Threaded environment containing flow expressions for static updates
+autocopy attribute staticFlowEnv::tm:Map<String [FlowExpr]>;
+synthesized attribute staticFlowEnvOut::tm:Map<String [FlowExpr]>;
+
+nonterminal LogicStmts with logicValueEnv, logicFunctionEnv, staticFlowEnv, pps, hostPreDecls, host<Stmt>, logicValueDefs, errors, hasFlowGraph, flowDefs, staticFlowEnvOut;
 
 abstract production consLogicStmt
 top::LogicStmts ::= h::LogicStmt t::LogicStmts
@@ -16,37 +19,86 @@ top::LogicStmts ::= h::LogicStmt t::LogicStmts
   top.errors := h.errors ++ t.errors;
   top.hasFlowGraph = h.hasFlowGraph && t.hasFlowGraph;
   top.flowDefs = h.flowDefs ++ t.flowDefs;
-  top.flowExprs = t.flowExprs;
   
   t.logicValueEnv = addScope(h.logicValueDefs, top.logicValueEnv);
+  
+  t.staticFlowEnv = h.staticFlowEnvOut;
+  top.staticFlowEnvOut = t.staticFlowEnvOut;
 }
 
-abstract production resultLogicStmt
-top::LogicStmts ::= result::LogicExpr
+abstract production nilLogicStmt
+top::LogicStmts ::= 
 {
-  top.pps = [pp"return ${result.pp};"];
+  top.pps = [];
   top.hostPreDecls = nilDecl();
-  top.host = returnStmt(justExpr(result.host));
+  top.host = nullStmt();
   top.logicValueDefs = [];
-  top.errors := result.errors;
-  top.hasFlowGraph = null(top.errors) && result.hasFlowGraph;
-  top.flowDefs = result.flowDefs;
-  top.flowExprs = result.flowExprs;
+  top.errors := [];
+  top.hasFlowGraph = true;
+  top.flowDefs = [];
   
-  top.errors <-
-    if result.logicType.width > top.givenReturnLogicType.width
-    then [err(result.location, s"Result type ${show(80, result.logicType.pp)} is wider than declared type ${show(80, top.givenReturnLogicType.pp)}")]
-    else [];
+  top.staticFlowEnvOut = top.staticFlowEnv;
 }
 
 synthesized attribute hostPreDecl::Decl;
 
-nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, pp, hostPreDecl, host<Stmt>, logicValueDefs, logicType, hasFlowGraph, errors, flowIds, flowDefs;
+nonterminal LogicStmt with logicValueEnv, logicFunctionEnv, staticFlowEnv, pp, hostPreDecl, host<Stmt>, logicValueDefs, hasFlowGraph, errors, flowDefs, staticFlowEnvOut;
 
-abstract production declLogicStmt
-top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
+abstract production valueDeclLogicStmt
+top::LogicStmt ::= d::LogicValueDecl
+{
+  top.pp = d.pp;
+  top.hostPreDecl = d.hostPreDecl;
+  top.host = d.host;
+  top.logicValueDefs = d.logicValueDefs;
+  top.hasFlowGraph = null(top.errors) && d.hasFlowGraph;
+  top.errors := d.errors;
+  top.flowDefs = d.flowDefs;
+  top.staticFlowEnvOut = top.staticFlowEnv;
+}
+
+abstract production staticUpdateLogicStmt
+top::LogicStmt ::= id::Name value::LogicExpr
+{
+  top.pp = pp"${id.pp} := ${value.pp};";
+  top.hostPreDecl =
+    variableDecls(
+      [staticStorageClass()], nilAttribute(),
+      id.logicValueItem.logicType.logicTypeExpr.host,
+      consDeclarator(
+        declarator(id, baseTypeExpr(), nilAttribute(), nothingInitializer()),
+        nilDeclarator()));
+  top.host =
+    exprStmt(
+      eqExpr(
+        declRefExpr(name("_static_" ++ id.name, location=builtin), location=builtin),
+        value.host,
+        location=builtin));
+  top.logicValueDefs = [];
+  top.hasFlowGraph = null(top.errors) && value.hasFlowGraph;
+  top.errors := value.errors;
+  top.flowDefs = value.flowDefs;
+  
+  top.staticFlowEnvOut = tm:add([pair(id.name, value.flowExprs)], top.staticFlowEnv);
+  
+  top.errors <- id.logicValueLookupCheck;
+  top.errors <-
+    if !id.logicValueItem.isStatic
+    then [err(id.location, "Can only perform update on static logic values")]
+    else [];
+  top.errors <-
+    if !null(tm:lookup(id.name, top.staticFlowEnv))
+    then [err(id.location, s"An update for ${id.name} is already defined")] 
+    else [];
+}
+
+nonterminal LogicValueDecl with logicValueEnv, logicFunctionEnv, pp, sourceLocation, hostPreDecl, host<Stmt>, logicValueDefs, logicType, hasFlowGraph, errors, flowIds, flowDefs;
+
+abstract production logicValueDecl
+top::LogicValueDecl ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
 {
   top.pp = pp"${typeExpr.pp} ${id.pp} = ${value.pp};";
+  top.sourceLocation = id.location;
   top.hostPreDecl =
     variableDecls(
       [], nilAttribute(),
@@ -60,7 +112,7 @@ top::LogicStmt ::= typeExpr::LogicTypeExpr id::Name value::LogicExpr
         declRefExpr(id, location=builtin),
         getHostCastProd(value.logicType, typeExpr.logicType)(value.host, builtin),
         location=builtin));
-  top.logicValueDefs = [pair(id.name, declLogicValueItem(top, id.location))];
+  top.logicValueDefs = [pair(id.name, declLogicValueItem(top))];
   top.logicType = typeExpr.logicType;
   top.hasFlowGraph = null(top.errors) && value.hasFlowGraph;
   top.errors := typeExpr.errors ++ value.errors;
