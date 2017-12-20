@@ -115,6 +115,13 @@ logic signed:8 condTest(unsigned:4 v) {
   return v[0]? 1 : v[1]? 2 : 3;
 }
 
+logic signed:32 fib(; signed:32 a, signed:32 b) {
+  signed:32 result = a + b;
+  new a = result;
+  new b = a;
+  return result;
+}
+
 int main (int argc, char **argv) {
 
   printf("0x%x\n", foo(12, true));
@@ -162,6 +169,27 @@ int main (int argc, char **argv) {
   printf("%d\n", condTest(1));
   printf("%d\n", condTest(2));
   printf("%d\n", condTest(4));
+  
+  printf("%d\n", logic host call fib(; 1, 0));
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", logic host call fib(; 1, 0));
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
+  printf("%d\n", fib());
   
   return 0; 
 }

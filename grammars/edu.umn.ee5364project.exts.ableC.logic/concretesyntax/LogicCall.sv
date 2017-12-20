@@ -13,6 +13,12 @@ top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'call' id::Identifier_t '(' arg
   top.ast = logicFunctionStaticCallExpr(mode.ast, fromId(id), foldExpr(args.ast), foldExpr(staticArgs.ast), location=top.location);
 }
 
+concrete production logicFunctionCallOnlyStaticExpr_c
+top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'call' id::Identifier_t '('  ';' staticArgs::LogicArgumentExprList_c ')'
+{
+  top.ast = logicFunctionStaticCallExpr(mode.ast, fromId(id), nilExpr(), foldExpr(staticArgs.ast), location=top.location);
+}
+
 concrete production logicFunctionCallExpr_c
 top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'call' id::Identifier_t '(' args::LogicArgumentExprList_c ')'
 {
@@ -35,6 +41,12 @@ concrete production logicFunctionInvokeStaticExpr_c
 top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'invoke' id::Identifier_t '(' args::LogicArgumentExprList_c ';' staticArgs::LogicArgumentExprList_c ')'
 {
   top.ast = logicFunctionStaticInvokeExpr(mode.ast, fromId(id), foldExpr(args.ast), foldExpr(staticArgs.ast), location=top.location);
+}
+
+concrete production logicFunctionInvokeOnlyStaticExpr_c
+top::PrimaryExpr_c ::= 'logic' mode::LogicMode_c 'invoke' id::Identifier_t '('  ';' staticArgs::LogicArgumentExprList_c ')'
+{
+  top.ast = logicFunctionStaticInvokeExpr(mode.ast, fromId(id), nilExpr(), foldExpr(staticArgs.ast), location=top.location);
 }
 
 concrete production logicFunctionInvokeExpr_c
