@@ -317,7 +317,7 @@ top::Stmt ::= id::Name args::Exprs
     map(logicTypeToHostType(top.env, _), id.logicFunctionItem.staticParameterLogicTypes);
   args.argumentPosition = 1;
   args.callExpr =
-    decorate directCallExpr(id, args, location=builtin)
+    decorate directCallExpr(id, args, location=id.location)
     with {env = top.env; labelEnv = top.labelEnv; returnType = top.returnType;};
   args.callVariadic = false;
   
@@ -355,7 +355,7 @@ top::Stmt ::= id::Name args::Exprs
     map(logicTypeToHostType(top.env, _), id.logicFunctionItem.staticParameterLogicTypes);
   args.argumentPosition = 1;
   args.callExpr =
-    decorate directCallExpr(id, args, location=builtin)
+    decorate directCallExpr(id, args, location=id.location)
     with {env = top.env; labelEnv = top.labelEnv; returnType = top.returnType;};
   args.callVariadic = false;
   
