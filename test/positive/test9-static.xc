@@ -9,7 +9,8 @@ logic signed:32 inc(signed:32 a; signed:32 counter) {
 }
 
 int main() {
-  printf("host:\n%d\n", logic host call inc(1; 0));
+  logic host static_init inc(0);
+  printf("host:\n%d\n", logic host call inc(1));
   printf("%d\n", logic host invoke inc(2));
   printf("%d\n", logic host invoke inc(3));
   printf("%d\n", logic host invoke inc(4));
@@ -17,7 +18,8 @@ int main() {
   
   int32_t result1 = logic host invoke inc(6);
   
-  printf("trans:\n%d\n", logic trans call inc(1; 0));
+  logic trans static_init inc(0);
+  printf("trans:\n%d\n", logic trans call inc(1));
   printf("%d\n", logic trans invoke inc(2));
   printf("%d\n", logic trans invoke inc(3));
   printf("%d\n", logic trans invoke inc(4));

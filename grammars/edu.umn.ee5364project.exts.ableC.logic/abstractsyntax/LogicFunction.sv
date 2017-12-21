@@ -45,24 +45,6 @@ top::Expr ::= id::Name args::Exprs
   forwards to logicFunctionCallExpr(hostMode(location=top.location), id, args, location=top.location);
 }
 
-abstract production logicFunctionStaticCallExpr
-top::Expr ::= mode::LogicMode id::Name args::Exprs staticArgs::Exprs
-{
-  propagate substituted;
-  top.pp = pp"logic ${mode.pp} call ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)} ; ${ppImplode(cat(comma(), space()), staticArgs.pps)})";
-  
-  id.logicFunctionEnv = top.env.logicFunctions;
-  
-  local localErrors::[Message] = mode.errors ++ id.logicFunctionLookupCheck;
-  local fwrd::Expr = 
-    stmtExpr(
-      logicFunctionInitStmt(mode, id),
-      logicFunctionStaticInvokeExpr(mode, id, args, staticArgs, location=top.location),
-      location=builtin);
-  
-  forwards to mkErrorCheck(localErrors, fwrd);
-}
-
 abstract production logicFunctionCallExpr
 top::Expr ::= mode::LogicMode id::Name args::Exprs
 {
@@ -213,120 +195,6 @@ Critical path length: ${toString(criticalPathLength)}
     else statsFwrd;
 }
 
-abstract production logicFunctionStaticInvokeExpr
-top::Expr ::= mode::LogicMode id::Name args::Exprs staticArgs::Exprs
-{
-  propagate substituted;
-  top.pp = pp"logic ${mode.pp} invoke ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)} ; ${ppImplode(cat(comma(), space()), staticArgs.pps)})";
-  forwards to mode.staticInvokeProd(id, args, staticArgs, top.location);
-}
-
-abstract production hostLogicFunctionStaticInvokeExpr
-top::Expr ::= id::Name args::Exprs staticArgs::Exprs
-{
-  propagate substituted;
-  top.pp = pp"logic host invoke ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)} ; ${ppImplode(cat(comma(), space()), staticArgs.pps)})";
-  
-  id.logicFunctionEnv = top.env.logicFunctions;
-  
-  args.expectedLogicTypes = id.logicFunctionItem.parameterLogicTypes;
-  args.expectedTypes =
-    map(logicTypeToHostType(top.env, _), id.logicFunctionItem.parameterLogicTypes);
-  args.argumentPosition = 1;
-  args.callExpr = top;
-  args.callVariadic = false;
-  
-  staticArgs.expectedLogicTypes = id.logicFunctionItem.staticParameterLogicTypes;
-  staticArgs.expectedTypes =
-    map(logicTypeToHostType(top.env, _), id.logicFunctionItem.staticParameterLogicTypes);
-  staticArgs.argumentPosition = 1;
-  staticArgs.callExpr = top;
-  staticArgs.callVariadic = false;
-  
-  local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
-  local fwrd::Expr =
-    directCallExpr(
-      getLogicFunctionHostName(id),
-      consExpr(
-        mkIntConst(1, builtin),
-        appendExprs(args.hostInvokeTrans, staticArgs.hostInvokeTrans)),
-      location=top.location);
-  
-  forwards to mkErrorCheck(localErrors, fwrd);
-}
-
-abstract production transLogicFunctionStaticInvokeExpr
-top::Expr ::= id::Name args::Exprs staticArgs::Exprs
-{
-  propagate substituted;
-  top.pp = pp"logic trans invoke ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)} ; ${ppImplode(cat(comma(), space()), staticArgs.pps)})";
-  
-  id.logicFunctionEnv = top.env.logicFunctions;
-  
-  args.expectedTypes =
-    map(logicTypeToHostType(top.env, _), id.logicFunctionItem.parameterLogicTypes);
-  args.argumentPosition = 1;
-  args.callExpr = top;
-  args.callVariadic = false;
-  
-  staticArgs.expectedTypes =
-    map(logicTypeToHostType(top.env, _), id.logicFunctionItem.staticParameterLogicTypes);
-  staticArgs.argumentPosition = 1;
-  staticArgs.callExpr = top;
-  staticArgs.callVariadic = false;
-  
-  local localErrors::[Message] =
-    (if !null(lookupMisc("--xc-logic-soft", top.env)) || null(lookupMisc("--xc-logic-hard", top.env))
-     then checkLogicSoftHInclude(id.location, top.env)
-     else checkLogicHInclude(id.location, top.env)) ++
-    id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
-  local softFwrd::Expr =
-    stmtExpr(
-      staticArgs.softStaticInvokeTrans,
-      directCallExpr(
-        name("soft_invoke", location=builtin),
-        case args of
-          nilExpr() -> consExpr(mkIntConst(0, builtin), consExpr(mkIntConst(0, builtin), nilExpr()))
-        | consExpr(e, nilExpr()) -> consExpr(e, consExpr(mkIntConst(0, builtin), nilExpr()))
-        | _ -> args
-        end,
-        location=builtin),
-      location=builtin);
-  local hardFwrd::Expr =
-    substExpr(
-      [declRefSubstitution(
-         "__a__",
-         case args of
-           consExpr(h, _) -> h
-         | _ -> mkIntConst(0, builtin)
-         end),
-       declRefSubstitution(
-         "__b__",
-         case args of
-           consExpr(_, consExpr(h, _)) -> h
-         | _ -> mkIntConst(0, builtin)
-         end),
-       stmtSubstitution("__static_moves__", staticArgs.hardStaticInvokeTrans)],
-      parseExpr(s"""
-({proto_typedef int32_t;
-  int32_t _result;
-  __static_moves__;
-  asm("lgi %0, %1, %2" :
-      "=r" (_result) :
-      "r" (__a__), "r" (__b__));
-  _result;})
-"""));
-  
-  local fwrd::Expr =
-    if !null(lookupMisc("--xc-logic-soft", top.env))
-    then softFwrd
-    else if !null(lookupMisc("--xc-logic-hard", top.env))
-    then hardFwrd
-    else softFwrd;
-  
-  forwards to mkErrorCheck(localErrors, fwrd);
-}
-
 abstract production logicFunctionInvokeExpr
 top::Expr ::= mode::LogicMode id::Name args::Exprs
 {
@@ -428,30 +296,114 @@ top::Expr ::= id::Name args::Exprs
   forwards to mkErrorCheck(localErrors, fwrd);
 }
 
+abstract production logicFunctionStaticInitStmt
+top::Stmt ::= mode::LogicMode id::Name args::Exprs
+{
+  propagate substituted;
+  top.pp = pp"logic ${mode.pp} static_init ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)})";
+  forwards to mode.staticInitProd(id, args);
+}
+
+abstract production hostLogicFunctionStaticInitStmt
+top::Stmt ::= id::Name args::Exprs
+{
+  propagate substituted;
+  top.pp = pp"logic host static_init ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)})";
+  
+  id.logicFunctionEnv = top.env.logicFunctions;
+  
+  args.expectedLogicTypes = id.logicFunctionItem.staticParameterLogicTypes;
+  args.expectedTypes =
+    map(logicTypeToHostType(top.env, _), id.logicFunctionItem.staticParameterLogicTypes);
+  args.argumentPosition = 1;
+  args.callExpr =
+    decorate directCallExpr(id, args, location=builtin)
+    with {env = top.env; labelEnv = top.labelEnv; returnType = top.returnType;};
+  args.callVariadic = false;
+  
+  local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
+  local fwrd::Stmt =
+    exprStmt(
+      directCallExpr(
+        getLogicFunctionHostName(id),
+        consExpr(
+          mkIntConst(1, builtin),
+          appendExprs(
+            foldExpr(
+              repeat(
+                mkIntConst(0, builtin),
+                length(id.logicFunctionItem.parameterLogicTypes))),
+            args.hostInvokeTrans)),
+        location=id.location));
+  
+  forwards to
+    if !null(localErrors) || !id.logicFunctionItem.hasFlowGraph
+    then warnStmt(localErrors)
+    else fwrd;
+}
+
+abstract production transLogicFunctionStaticInitStmt
+top::Stmt ::= id::Name args::Exprs
+{
+  propagate substituted;
+  top.pp = pp"logic trans static_init ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)})";
+  
+  id.logicFunctionEnv = top.env.logicFunctions;
+  
+  args.expectedLogicTypes = id.logicFunctionItem.staticParameterLogicTypes;
+  args.expectedTypes =
+    map(logicTypeToHostType(top.env, _), id.logicFunctionItem.staticParameterLogicTypes);
+  args.argumentPosition = 1;
+  args.callExpr =
+    decorate directCallExpr(id, args, location=builtin)
+    with {env = top.env; labelEnv = top.labelEnv; returnType = top.returnType;};
+  args.callVariadic = false;
+  
+  local localErrors::[Message] =
+    (if !null(lookupMisc("--xc-logic-soft", top.env)) || null(lookupMisc("--xc-logic-hard", top.env))
+     then checkLogicSoftHInclude(id.location, top.env)
+     else checkLogicHInclude(id.location, top.env)) ++
+    id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
+  local softFwrd::Stmt = args.softStaticInitTrans;
+  local hardFwrd::Stmt = args.hardStaticInitTrans;
+  
+  local fwrd::Stmt =
+    if !null(lookupMisc("--xc-logic-soft", top.env))
+    then softFwrd
+    else if !null(lookupMisc("--xc-logic-hard", top.env))
+    then hardFwrd
+    else softFwrd;
+  
+  forwards to
+    if !null(localErrors) || !id.logicFunctionItem.hasFlowGraph
+    then warnStmt(localErrors)
+    else fwrd;
+}
+
 attribute expectedLogicTypes occurs on Exprs;
 synthesized attribute hostInvokeTrans::Exprs occurs on Exprs;
-synthesized attribute softStaticInvokeTrans::Stmt occurs on Exprs;
-synthesized attribute hardStaticInvokeTrans::Stmt occurs on Exprs;
+synthesized attribute softStaticInitTrans::Stmt occurs on Exprs;
+synthesized attribute hardStaticInitTrans::Stmt occurs on Exprs;
 
 aspect production consExpr
 top::Exprs ::= h::Expr t::Exprs
 {
   top.hostInvokeTrans = consExpr(bitTrimExpr(head(top.expectedLogicTypes).width, h), t);
   local staticRegister::Integer = top.argumentPosition - 1;
-  top.softStaticInvokeTrans =
+  top.softStaticInitTrans =
     seqStmt(
       exprStmt(
         directCallExpr(
           name("soft_set_static", location=builtin),
           consExpr(mkIntConst(staticRegister, builtin), consExpr(h, nilExpr())),
           location=builtin)),
-      t.softStaticInvokeTrans);
-  top.hardStaticInvokeTrans =
+      t.softStaticInitTrans);
+  top.hardStaticInitTrans =
     seqStmt(
       substStmt(
         [declRefSubstitution("__a__", h)],
         parseStmt(s"""asm("lgmove ${toString(staticRegister)}, %0" : : "r" (__a__));""")),
-      t.hardStaticInvokeTrans);
+      t.hardStaticInitTrans);
   t.expectedLogicTypes = tail(top.expectedLogicTypes);
 }
 
@@ -459,15 +411,15 @@ aspect production nilExpr
 top::Exprs ::=
 {
   top.hostInvokeTrans = nilExpr();
-  top.softStaticInvokeTrans = nullStmt();
-  top.hardStaticInvokeTrans = nullStmt();
+  top.softStaticInitTrans = nullStmt();
+  top.hardStaticInitTrans = nullStmt();
 }
 
 synthesized attribute initProd::(Stmt ::= Name);
-synthesized attribute staticInvokeProd::(Expr ::= Name Exprs Exprs Location);
 synthesized attribute invokeProd::(Expr ::= Name Exprs Location);
+synthesized attribute staticInitProd::(Stmt ::= Name Exprs);
 
-nonterminal LogicMode with env, pp, errors, initProd, staticInvokeProd, invokeProd, location;
+nonterminal LogicMode with env, pp, errors, initProd, invokeProd, staticInitProd, location;
 
 abstract production hostMode
 top::LogicMode ::= 
@@ -475,8 +427,8 @@ top::LogicMode ::=
   top.pp = pp"host";
   top.errors := [];
   top.initProd = \ id::Name -> nullStmt();
-  top.staticInvokeProd = hostLogicFunctionStaticInvokeExpr(_, _, _, location=_);
   top.invokeProd = hostLogicFunctionInvokeExpr(_, _, location=_);
+  top.staticInitProd = hostLogicFunctionStaticInitStmt(_, _);
 }
 
 abstract production transMode
@@ -488,8 +440,8 @@ top::LogicMode ::=
     then checkLogicSoftHInclude(top.location, top.env)
     else [];
   top.initProd = transLogicFunctionInitStmt;
-  top.staticInvokeProd = transLogicFunctionStaticInvokeExpr(_, _, _, location=_);
   top.invokeProd = transLogicFunctionInvokeExpr(_, _, location=_);
+  top.staticInitProd = transLogicFunctionStaticInitStmt(_, _);
 }
 
 abstract production defaultMode
@@ -537,11 +489,10 @@ proto_typedef bool, __res_type__, __params__;
 ${if top.isTopLevel then "static" else ""} inline __res_type__ _logic_function_${id.name}(bool staticArgsProvided, __params__) {
   __pre_decls__;
   __res_type__ _result;
-  if (staticArgsProvided) {
-    __static_init__;
+  if (!staticArgsProvided) {
+    __body__;
+    _result = __result__;
   }
-  __body__;
-  _result = __result__;
   __static_init__;
   return _result;
 }

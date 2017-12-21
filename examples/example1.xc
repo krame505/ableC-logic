@@ -168,8 +168,8 @@ int main (int argc, char **argv) {
   printf("%d\n", condTest(1));
   printf("%d\n", condTest(2));
   printf("%d\n", condTest(4));
-  
-  printf("%d\n", logic host call fib(; 1, 0));
+
+  logic host static_init fib(1, 0);
   printf("%d\n", fib());
   printf("%d\n", fib());
   printf("%d\n", fib());
@@ -178,8 +178,8 @@ int main (int argc, char **argv) {
   printf("%d\n", fib());
   printf("%d\n", fib());
   printf("%d\n", fib());
+  logic host static_init fib(1, 0);
   printf("%d\n", fib());
-  printf("%d\n", logic host call fib(; 1, 0));
   printf("%d\n", fib());
   printf("%d\n", fib());
   printf("%d\n", fib());
