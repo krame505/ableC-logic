@@ -301,6 +301,7 @@ top::Stmt ::= mode::LogicMode id::Name args::Exprs
 {
   propagate substituted;
   top.pp = pp"logic ${mode.pp} static_init ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)})";
+  top.functionDefs := [];
   forwards to mode.staticInitProd(id, args);
 }
 
@@ -309,6 +310,7 @@ top::Stmt ::= id::Name args::Exprs
 {
   propagate substituted;
   top.pp = pp"logic host static_init ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)})";
+  top.functionDefs := [];
   
   id.logicFunctionEnv = top.env.logicFunctions;
   
@@ -347,6 +349,7 @@ top::Stmt ::= id::Name args::Exprs
 {
   propagate substituted;
   top.pp = pp"logic trans static_init ${id.pp}(${ppImplode(cat(comma(), space()), args.pps)})";
+  top.functionDefs := [];
   
   id.logicFunctionEnv = top.env.logicFunctions;
   

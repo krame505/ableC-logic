@@ -81,7 +81,7 @@ top::Env ::= d::Defs  e::Decorated Env
 {
   top.logicFunctions = addGlobalScope(gd.logicFunctionContribs, addScope(d.logicFunctionContribs, e.logicFunctions));
 }
-aspect production openEnvScope_i
+aspect production openScopeEnv_i
 top::Env ::= e::Decorated Env
 {
   top.logicFunctions = openScope(e.logicFunctions);
