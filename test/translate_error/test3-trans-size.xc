@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 logic unsigned:32 foo(unsigned:32 a, unsigned:32 b) {
-  return a ^ b ^ a ^ b ^ a ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b;
+  return a ^ b ^ a ^ b ^ a ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b ^ a ^ b;
 }
 
 int main() {
