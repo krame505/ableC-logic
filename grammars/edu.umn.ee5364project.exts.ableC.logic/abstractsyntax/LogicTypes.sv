@@ -174,7 +174,6 @@ Type ::= env::Decorated Env  logicType::LogicType
 {
   local bty::BaseTypeExpr = logicType.logicTypeExpr.host;
   bty.env = env;
-  bty.labelEnv = emptyScope();
   bty.givenRefId = nothing();
   bty.returnType = nothing();
   return bty.typerep;

@@ -68,7 +68,7 @@ top::Stmt ::= mode::LogicMode id::Name
 {
   propagate substituted;
   top.pp = pp"logic ${mode.pp} init ${id.pp};";
-  top.labelDefs := [];
+  top.functionDefs := [];
   forwards to mode.initProd(id);
 }
 
@@ -77,7 +77,7 @@ top::Stmt ::= id::Name
 {
   propagate substituted;
   top.pp = pp"logic trans init ${id.pp};";
-  top.labelDefs := [];
+  top.functionDefs := [];
   
   -- Look up specification values defined in the header file
   local wordSize::Integer =
@@ -318,7 +318,7 @@ top::Stmt ::= id::Name args::Exprs
   args.argumentPosition = 1;
   args.callExpr =
     decorate directCallExpr(id, args, location=id.location)
-    with {env = top.env; labelEnv = top.labelEnv; returnType = top.returnType;};
+    with {env = top.env; returnType = top.returnType;};
   args.callVariadic = false;
   
   local localErrors::[Message] = id.logicFunctionLookupCheck ++ args.errors ++ args.argumentErrors;
@@ -356,7 +356,7 @@ top::Stmt ::= id::Name args::Exprs
   args.argumentPosition = 1;
   args.callExpr =
     decorate directCallExpr(id, args, location=id.location)
-    with {env = top.env; labelEnv = top.labelEnv; returnType = top.returnType;};
+    with {env = top.env; returnType = top.returnType;};
   args.callVariadic = false;
   
   local localErrors::[Message] =
